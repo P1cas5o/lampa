@@ -3121,7 +3121,40 @@
             }, function () { });
         }
 
-       
+        function loadLogo(activity, movie) {
+            var render = activity.render();
+            var logo = render.find('.applecation__logo');
+            var titleEl = render.find('.full-start-new__title');
+
+            var type = movie.name ? 'tv' : 'movie';
+            var url = Lampa.TMDB.api(type + '/' + movie.id + '/images?api_key=' + Lampa.TMDB.key() + '&language=' + Lampa.Storage.get('language'));
+            $.get(url, function (data) {
+                if (!isComponentActive(activity)) return;
+                if (data && data.logos && data.logos[0]) {
+                    var p = data.logos[0].file_path;
+                    var imgUrl = Lampa.TMDB.image('/t/p/w500' + p);
+                    var img = new Image();
+                    img.onload = function () {
+                        if (!isComponentActive(activity)) return;
+                        logo.html('<img src="' + imgUrl + '" alt="" />');
+                        waitForBackground(activity, function () { if (isComponentActive(activity)) logo.addClass('loaded'); });
+                        var overlay = $('.applecation-description-overlay');
+                        if (overlay.length) {
+                            overlay.find('.applecation-description-overlay__logo').html($('<img>').attr('src', imgUrl)).css('display', 'block');
+                            overlay.find('.applecation-description-overlay__title').css('display', 'none');
+                        }
+                    };
+                    img.src = imgUrl;
+                } else {
+                    titleEl.show();
+                    waitForBackground(activity, function () { if (isComponentActive(activity)) logo.addClass('loaded'); });
+                }
+            }).fail(function () {
+                titleEl.show();
+                waitForBackground(activity, function () { if (isComponentActive(activity)) logo.addClass('loaded'); });
+            });
+        }
+
         function bindScrollDim(activity) {
             var render = activity.render();
             var bg = render.find('.full-start__background:not(.applecation__overlay)')[0];
