@@ -415,7 +415,66 @@
     /** Для рядка на головній: HBO/Prime/Paramount через watch_providers (TMDB), щоб отримувати і фільми, і серіали з актуальним контентом. */
     var SERVICE_WATCH_PROVIDERS_FOR_ROW = { hbo: '384', amazon: '119', paramount: '531' };
 
-    
+    // =================================================================
+    // GLOBAL PLAYER HELPER
+    // =================================================================
+    function playYouTubeCustom(key) {
+        var overlay = $('<div class="youtube-pro-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 10000; background: #000;"></div>');
+        var playerContainer = $('<div id="yt-player-custom"></div>');
+        var loader = $('<div class="yt-loader" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 1.5em; font-weight: bold; text-align: center;"><div class="broadcast__scan"></div><div>' + tr('loading_trailer') + '</div></div>');
+        
+        overlay.append(loader);
+        overlay.append(playerContainer);
+        $('body').append(overlay);
+        
+        var closePlayer = function() {
+            overlay.remove();
+            Lampa.Controller.toggle('content'); 
+        };
+        
+        Lampa.Controller.add('youtube_custom_controller', {
+            toggle: function() {}, up: function() {}, down: function() {}, left: function() {}, right: function() {},
+            enter: function() {}, back: closePlayer
+        });
+        Lampa.Controller.toggle('youtube_custom_controller');
+        
+        var initPlayer = function() {
+            new YT.Player('yt-player-custom', {
+                height: '100%',
+                width: '100%',
+                videoId: key,
+                playerVars: { 'autoplay': 1, 'controls': 1, 'showinfo': 0, 'rel': 0, 'modestbranding': 1, 'iv_load_policy': 3, 'playsinline': 1, 'disablekb': 1, 'fs': 0 },
+                events: {
+                    'onReady': function(event) { 
+                        loader.remove(); // Hide loader
+                        event.target.playVideo(); 
+                    },
+                    'onStateChange': function(event) {
+                        if (event.data === 0) { // 0 = ended
+                            closePlayer();
+                        }
+                    },
+                    'onError': function(e) { 
+                        if (e.data == 150 || e.data == 153) Lampa.Noty.show('Відео обмежено власником (Error ' + e.data + ')');
+                        else Lampa.Noty.show('Помилка YouTube: ' + e.data);
+                        closePlayer();
+                    }
+                }
+            });
+        };
+        
+        if (typeof YT === 'undefined' || typeof YT.Player === 'undefined') {
+            var tag = document.createElement('script');
+            tag.src = "https://www.youtube.com/iframe_api";
+            var firstScriptTag = document.getElementsByTagName('script')[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+            var oldReady = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = function() { if(oldReady) oldReady(); initPlayer(); };
+        } else {
+            initPlayer();
+        }
+    }
+
     // =================================================================
     // UTILS & COMPONENTS
     // =================================================================
