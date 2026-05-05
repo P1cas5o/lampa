@@ -1,4 +1,413 @@
 // =================================================================
+    // UTILS & COMPONENTS
+    // =================================================================
+
+    // Один елемент геро-рядка (backdrop + overlay). heightEm — висота банеру (напр. 28).
+    function makeHeroResultItem(movie, heightEm) {
+        if (!$('#studios5-hero-css').length) {
+            $('body').append('<style id="studios5-hero-css">.hero-banner .card-marks, .hero-banner .card__icons, .hero-banner .card__quality { display: none !important; }</style>');
+        }
+        if (!$('#studios5-show-more-css').length) {
+            $('body').append('<style id="studios5-show-more-css">' +
+                '.show-more-button.focus { transform: scale(1.05) !important; box-shadow: 0 0 0 3px #fff !important; z-index: 10 !important; }' +
+                '.card.show-more-button:focus { transform: scale(1.05) !important; box-shadow: 0 0 0 3px #fff !important; z-index: 10 !important; }' +
+                '.kino-card.show-more-button:hover { transform: scale(1.05) !important; box-shadow: 0 0 0 3px #fff !important; z-index: 10 !important; }' +
+                '.kino-card.show-more-button.focus { transform: scale(1.05) !important; box-shadow: 0 0 0 3px #fff !important; z-index: 10 !important; }' +
+            '</style>');
+        }
+        heightEm = heightEm || 22.5;
+        var pad = (heightEm / 35 * 2).toFixed(1);
+        var titleEm = (heightEm / 35 * 2.5).toFixed(2);
+        var descEm = (heightEm / 35 * 1.1).toFixed(2);
+
+        var renderHeroContent = function(item, movie) {
+            item.empty(); // Clear existing content
+            item.append('<div class="hero-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(to top, rgba(0,0,0,0.9), transparent); padding: ' + pad + 'em; border-radius: 0 0 1em 1em;">' +
+                '<div class="hero-header" style="margin-bottom: 0.3em; min-height: 3em; display: flex; align-items: flex-end;">' +
+                    '<div class="hero-title" style="font-size: ' + titleEm + 'em; font-weight: bold; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.7);">' + (movie.title || movie.name) + '</div>' +
+                '</div>' +
+                '<div class="hero-meta" style="display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em; font-size: 0.9em; color: #ccc; margin-bottom: 0.5em;"></div>' +
+                '<div class="hero-desc" style="font-size: ' + descEm + 'em; color: #ddd; max-width: 60%; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-bottom: 0.6em;">' + (movie.overview || '') + '</div>' +
+                '<div class="hero-trailer-btn selector" style="display: inline-flex; align-items: center; background: rgba(255, 255, 255, 0.2); padding: 0.4em 0.8em; border-radius: 0.3em; cursor: pointer; transition: background 0.2s;">' +
+                '<svg style="width: 1.2em; height: 1.2em; margin-right: 0.4em;" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>' +
+                '<span style="font-size: 0.9em; font-weight: 600;">Трейлер</span>' +
+                '</div>' +
+                '</div>');
+            
+            // Trailer Click
+            item.find('.hero-trailer-btn').on('hover:enter click', function (e) {
+                e.stopPropagation();
+                var network = new Lampa.Reguest();
+                var type = movie.name ? 'tv' : 'movie';
+                var lang = Lampa.Storage.get('language', 'uk');
+                function search(searchLang) {
+                    var url = Lampa.TMDB.api(type + '/' + movie.id + '/videos?api_key=' + getTmdbKey() + '&language=' + searchLang);
+                    network.silent(url, function (json) {
+                        var videos = json.results || [];
+                        var trailer = videos.find(function(v) { return v.type === 'Trailer' && v.site === 'YouTube'; }) || videos[0];
+                        if (trailer && trailer.key) {
+                            playYouTubeCustom(trailer.key);
+                        } else if (searchLang !== 'en-US') {
+                            search('en-US');
+                        } else {
+                            Lampa.Noty.show('Трейлер не знайдено');
+                        }
+                    }, function() {
+                            if (searchLang !== 'en-US') search('en-US');
+                            else Lampa.Noty.show('Помилка пошуку трейлера');
+                    });
+                }
+                search(lang);
+            });
+
+            // Fetch Details
+            var type = movie.name ? 'tv' : 'movie';
+            var lang = Lampa.Storage.get('language', 'uk');
+            var url = Lampa.TMDB.api(type + '/' + movie.id + '?api_key=' + getTmdbKey() + '&language=' + lang + '&append_to_response=images,release_dates,content_ratings');
+            
+            var network = new Lampa.Reguest();
+            network.silent(url, function(details) {
+                // Logo
+                var logo = null;
+                if (details.images && details.images.logos && details.images.logos.length) {
+                    logo = details.images.logos.find(function(l) { return l.iso_639_1 === lang; }) || 
+                           details.images.logos.find(function(l) { return l.iso_639_1 === 'en'; }) || 
+                           details.images.logos[0];
+                }
+                if (logo) {
+                    var logoUrl = Lampa.TMDB.image('t/p/w500' + logo.file_path);
+                    item.find('.hero-title').html('<img src="' + logoUrl + '" style="height: 4em; width: auto; max-width: 80%; object-fit: contain; display: block;" />');
+                    item.find('.hero-header').css('min-height', 'auto');
+                }
+
+                // Metadata
+                var metaParts = [];
+                
+                // Rating & Year
+                var headMeta = '';
+                var rating = details.vote_average || movie.vote_average;
+                if (rating) headMeta += '<span class="card__mark card__mark--rating" style="position: static; margin: 0 0.5em 0 0; padding: 0.2em 0.5em; font-size: 0.9em; background: rgba(255,255,255,0.2); border-radius: 0.3em;">★ ' + parseFloat(rating).toFixed(1) + '</span>';
+                
+                var date = details.release_date || details.first_air_date || movie.release_date || movie.first_air_date;
+                if (date) headMeta += parseInt(date);
+                
+                if (headMeta) metaParts.push(headMeta);
+                
+                // Type
+                var typeStr = type === 'movie' ? Lampa.Lang.translate('movie') : Lampa.Lang.translate('tv');
+                if (!typeStr || typeStr === 'movie' || typeStr === 'tv') {
+                    typeStr = type === 'movie' ? (lang === 'ru' ? 'Фильм' : 'Фільм') : (lang === 'ru' ? 'Сериал' : 'Серіал');
+                }
+                metaParts.push(typeStr);
+                
+                // Age Rating
+                var age = '';
+                if (type === 'movie' && details.release_dates && details.release_dates.results) {
+                    var rel = details.release_dates.results.find(function(r) { return r.iso_3166_1 === 'US' || r.iso_3166_1 === 'RU'; });
+                    if (rel && rel.release_dates && rel.release_dates.length) age = rel.release_dates[0].certification;
+                } else if (type === 'tv' && details.content_ratings && details.content_ratings.results) {
+                    var rat = details.content_ratings.results.find(function(r) { return r.iso_3166_1 === 'US' || r.iso_3166_1 === 'RU'; });
+                    if (rat) age = rat.rating;
+                }
+                if (age) {
+                    var ageColor = '#fff';
+                    var ageVal = parseInt(age);
+                    var displayAge = age;
+
+                    if (!isNaN(ageVal)) {
+                        displayAge = ageVal + '+';
+                        if (ageVal >= 18) ageColor = '#d32f2f'; // Red
+                        else if (ageVal >= 16) ageColor = '#f57c00'; // Orange
+                        else if (ageVal >= 12) ageColor = '#fbc02d'; // Yellow
+                        else ageColor = '#388e3c'; // Green
+                    } else {
+                        // US Ratings Mapping
+                        if (['R', 'NC-17', 'TV-MA'].indexOf(age) !== -1) {
+                            ageColor = '#d32f2f';
+                            displayAge = '18+';
+                        } else if (['PG-13', 'TV-14'].indexOf(age) !== -1) {
+                            ageColor = '#f57c00';
+                            displayAge = '16+';
+                        } else if (['PG', 'TV-PG', 'TV-Y7'].indexOf(age) !== -1) {
+                            ageColor = '#fbc02d';
+                            displayAge = '12+';
+                        } else {
+                            ageColor = '#388e3c';
+                            displayAge = '0+';
+                        }
+                    }
+                    metaParts.push('<span style="border: 1px solid ' + ageColor + '; color: ' + ageColor + '; padding: 0 0.3em; border-radius: 0.2em; font-size: 0.9em; font-weight: bold;">' + displayAge + '</span>');
+                }
+
+                // Country
+                if (details.production_countries && details.production_countries.length) {
+                    metaParts.push(details.production_countries[0].iso_3166_1);
+                }
+                
+                // Duration
+                var runtime = details.runtime || (details.episode_run_time ? details.episode_run_time[0] : 0);
+                if (runtime) {
+                    var h = Math.floor(runtime / 60);
+                    var m = runtime % 60;
+                    var hStr = h > 0 ? h + (lang === 'ru' ? 'ч.' : 'год.') : '';
+                    var mStr = m > 0 ? m + (lang === 'ru' ? 'м.' : 'хв.') : '';
+                    if (hStr || mStr) metaParts.push((hStr + ' ' + mStr).trim());
+                }
+
+                if (metaParts.length) {
+                    item.find('.hero-meta').html('<span>' + metaParts.join('</span><span>') + '</span>');
+                }
+            });
+        };
+
+        return {
+            title: 'Hero',
+            params: {
+                createInstance: function (element) {
+                    var card = Lampa.Maker.make('Card', element, function (module) { return module.only('Card', 'Callback'); });
+                    return card;
+                },
+                emit: {
+                    onCreate: function () {
+                        var img = movie.backdrop_path ? Lampa.TMDB.image('t/p/original' + movie.backdrop_path) : (movie.poster_path ? Lampa.TMDB.image('t/p/original' + movie.poster_path) : '');
+                        try {
+                            var item = $(this.html);
+                            item.addClass('hero-banner');
+                            item.css({
+                                'background-image': 'url(' + img + ')',
+                                'width': '100%',
+                                'height': heightEm + 'em',
+                                'background-size': 'cover',
+                                'background-position': 'center',
+                                'border-radius': '1em',
+                                'position': 'relative',
+                                'box-shadow': '0 0 20px rgba(0,0,0,0.5)',
+                                'margin-bottom': '10px'
+                            });
+                            
+                            renderHeroContent(item, movie);
+
+                            item.find('.card__view').remove();
+                            item.find('.card__title').remove();
+                            item.find('.card__age').remove();
+                            item.find('.card-marks').remove();
+                            item.find('.card__icons').remove();
+                            item[0].heroMovieData = movie;
+                        } catch (e) { console.log('Hero onCreate error:', e); }
+                    },
+                    onVisible: function () {
+                        try {
+                            var item = $(this.html);
+                            if (!item.hasClass('hero-banner')) {
+                                var img = movie.backdrop_path ? Lampa.TMDB.image('t/p/original' + movie.backdrop_path) : (movie.poster_path ? Lampa.TMDB.image('t/p/original' + movie.poster_path) : '');
+                                item.addClass('hero-banner');
+                                item.css({
+                                    'background-image': 'url(' + img + ')',
+                                    'width': '100%',
+                                    'height': heightEm + 'em',
+                                    'background-size': 'cover',
+                                    'background-position': 'center',
+                                    'border-radius': '1em',
+                                    'position': 'relative',
+                                    'box-shadow': '0 0 20px rgba(0,0,0,0.5)',
+                                    'margin-bottom': '10px'
+                                });
+                                
+                                renderHeroContent(item, movie);
+
+                                item.find('.card__view').remove();
+                                item.find('.card__title').remove();
+                                item.find('.card__age').remove();
+                                item.find('.card-marks').remove();
+                                item.find('.card__icons').remove();
+                                item[0].heroMovieData = movie;
+                            }
+                            // Stop default image loading
+                            if (this.img) this.img.onerror = function () { };
+                            if (this.img) this.img.onload = function () { };
+                        } catch (e) { console.log('Hero onVisible error:', e); }
+                    },
+                    onlyEnter: function () {
+                        // Функция запуска трейлера (копируем логику из кнопки)
+                        var playHeroTrailer = function() {
+                             var network = new Lampa.Reguest();
+                             var type = movie.name ? 'tv' : 'movie';
+                             var lang = Lampa.Storage.get('language', 'uk');
+                            
+                            function search(searchLang) {
+                                var url = Lampa.TMDB.api(type + '/' + movie.id + '/videos?api_key=' + getTmdbKey() + '&language=' + searchLang);
+                                network.silent(url, function (json) {
+                                    var videos = json.results || [];
+                                    var trailer = videos.find(function(v) { return v.type === 'Trailer' && v.site === 'YouTube'; }) || videos[0];
+                                    if (trailer && trailer.key) {
+                                        playYouTubeCustom(trailer.key);
+                                    } else if (searchLang !== 'en-US') {
+                                        search('en-US');
+                                    } else {
+                                        Lampa.Noty.show('Трейлер не знайдено');
+                                    }
+                                }, function() {
+                                     if (searchLang !== 'en-US') search('en-US');
+                                     else Lampa.Noty.show('Помилка пошуку трейлера');
+                                });
+                            }
+                            search(lang);
+                        };
+
+                        // Меню выбора действия
+                        Lampa.Select.show({
+                            title: tr('menu_title'),
+                            items: [
+                                { title: tr('menu_details'), action: 'open' },
+                                { title: tr('menu_trailer'), action: 'trailer' }
+                            ],
+                            onSelect: function(a) {
+                                if(a.action === 'trailer') {
+                                    playHeroTrailer();
+                                } else {
+                                    Lampa.Activity.push({
+                                        url: '',
+                                        component: 'full',
+                                        id: movie.id,
+                                        method: movie.name ? 'tv' : 'movie',
+                                        card: movie,
+                                        source: 'tmdb'
+                                    });
+                                }
+                            }
+                        });
+                    },
+                    onKey: function(key) {
+                        if (key === 'play') {
+                           // Копия логики запуска трейлера (можно вынести в отдельную функцию выше, но здесь дублируем для надежности области видимости)
+                           var playHeroTrailerKey = function() {
+                                  var network = new Lampa.Reguest();
+                                  var type = movie.name ? 'tv' : 'movie';
+                                  var lang = Lampa.Storage.get('language', 'uk');
+                                  
+                                function search(searchLang) {
+                                    var url = Lampa.TMDB.api(type + '/' + movie.id + '/videos?api_key=' + getTmdbKey() + '&language=' + searchLang);
+                                    network.silent(url, function (json) {
+                                        var videos = json.results || [];
+                                        var trailer = videos.find(function(v) { return v.type === 'Trailer' && v.site === 'YouTube'; }) || videos[0];
+                                        if (trailer && trailer.key) { playYouTubeCustom(trailer.key); } 
+                                        else if (searchLang !== 'en-US') { search('en-US'); } 
+                                        else { Lampa.Noty.show('Трейлер не знайдено'); }
+                                    });
+                                }
+                                search(lang);
+                           };
+                           playHeroTrailerKey();
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    function StudiosMain(object) {
+        var comp = new Lampa.InteractionMain(object);
+        var config = SERVICE_CONFIGS[object.service_id];
+        if (!config) { comp.empty && comp.empty(); return comp; }
+
+        comp.create = function () {
+            var _this = this;
+            this.activity.loader(true);
+            var categories = config.categories;
+            var network = new Lampa.Reguest();
+            var total = categories.length; // No hero section
+            var status = new Lampa.Status(total);
+
+            status.onComplite = function () {
+                var fulldata = [];
+                // Hero section removed - only show categories
+                if (status.data) {
+                    Object.keys(status.data).sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); }).forEach(function (key) {
+                        var num = parseInt(key, 10);
+                        var data = status.data[key];
+                        var cat = categories[num];
+                        if (cat && data && data.results && data.results.length) {
+                            Lampa.Utils.extendItemsParams(data.results, { style: { name: 'wide' } });
+                            fulldata.push({
+                                title: cat.title,
+                                results: data.results,
+                                url: cat.url,
+                                params: cat.params,
+                                service_id: object.service_id
+                            });
+                        }
+                    });
+                }
+
+                if (fulldata.length) {
+                    _this.build(fulldata);
+                    _this.activity.loader(false);
+                } else {
+                    _this.empty();
+                }
+            };
+
+            var refCat = categories.find(function (c) { return c.params && (c.params.with_watch_providers || c.params.with_networks || c.params.with_companies); });
+            var filterSuffix = '';
+            if (refCat && refCat.params) {
+                if (refCat.params.with_watch_providers) {
+                    filterSuffix = '&with_watch_providers=' + refCat.params.with_watch_providers + '&watch_region=' + (refCat.params.watch_region || 'UA');
+                } else if (refCat.params.with_networks) {
+                    filterSuffix = '&with_networks=' + refCat.params.with_networks;
+                } else if (refCat.params.with_companies) {
+                    filterSuffix = '&with_companies=' + refCat.params.with_companies;
+                }
+            }
+
+            // Hero section removed - just load categories
+            categories.forEach(function (cat, index) {
+                var params = [];
+                params.push('api_key=' + getTmdbKey());
+                params.push('language=' + Lampa.Storage.get('language', 'uk'));
+                if (cat.params) {
+                    for (var key in cat.params) {
+                        var val = cat.params[key];
+                        if (val === '{current_date}') {
+                            var d = new Date();
+                            val = [d.getFullYear(), ('0' + (d.getMonth() + 1)).slice(-2), ('0' + d.getDate()).slice(-2)].join('-');
+                        }
+                        params.push(key + '=' + val);
+                    }
+                }
+                var url = Lampa.TMDB.api(cat.url + '?' + params.join('&'));
+
+                console.log('[StudiosMain] Category', index + 1, ':', cat.title, 'URL:', url);
+
+                network.silent(url, function (json) {
+                    console.log('[StudiosMain] Category', index + 1, 'data received:', json);
+                    // FIX: Normalize image paths
+                    if (json && json.results && Array.isArray(json.results)) {
+                        json.results.forEach(function (item) {
+                            if (!item.poster_path && item.backdrop_path) {
+                                item.poster_path = item.backdrop_path;
+                            }
+                        });
+                    }
+                    status.append(index.toString(), json);
+                }, function () { status.error(); });
+            });
+
+            return this.render();
+        };
+
+        comp.onMore = function (data) {
+            Lampa.Activity.push({
+                url: data.url,
+                params: data.params,
+                title: data.title,
+                component: 'studios_view',
+                page: 1
+            });
+        };
+
+        return comp;
+    }
+// =================================================================
     // FLIXIO QUALITY MARKS (Jacred)
     // =================================================================
 
