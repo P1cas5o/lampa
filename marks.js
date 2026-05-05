@@ -3227,6 +3227,163 @@
             }, 100);
         }
 
+        Lampa.Listener.follow('full', function (e) {
+            if (e.type !== 'complite') return;
+            var activity = e.object && e.object.activity;
+            if (!activity || !activity.render) return;
+            var render = activity.render();
+            activity.__destroyed = false;
+            var oldDestroy = activity.destroy;
+            activity.destroy = function () {
+                activity.__destroyed = true;
+                if (oldDestroy) oldDestroy.apply(activity, arguments);
+            };
+
+            injectApplecationDom(activity);
+
+            var movie = e.data && e.data.movie;
+            if (!movie) return;
+
+            injectMeta(activity, movie);
+            injectDescription(activity, movie);
+            injectInfo(activity, movie);
+            bindScrollDim(activity);
+            applyMarquee(activity);
+            getQualityLabels(movie, activity);
+            loadLogo(activity, movie);
+
+            waitForBackground(activity, function () {
+                if (!isComponentActive(activity)) return;
+                render.find('.applecation__meta').addClass('show');
+                render.find('.applecation__description-wrapper').addClass('show');
+                render.find('.applecation__info').addClass('show');
+                render.find('.applecation__ratings').addClass('show');
+            });
+        });
+    }
+
+    function initMaxsmRatingsIntegration() {
+        if (window.maxsmRatingsPlugin) return;
+        if (typeof Lampa === 'undefined') return;
+
+        function normalizeApiKeys(value) {
+            if (!value) return [];
+            if (Array.isArray(value)) return value.filter(function (v) { return !!v; });
+            if (typeof value === 'string') return [value];
+            return [];
+        }
+
+        var TOKENS = window.RATINGS_PLUGIN_TOKENS || {};
+        var OMDB_API_KEYS = normalizeApiKeys(TOKENS.OMDB_API_KEYS || TOKENS.OMDB || TOKENS.OMDB_KEYS || TOKENS.OMDB_API_KEY || TOKENS.OMDB_KEY);
+        var KP_API_KEYS = normalizeApiKeys(TOKENS.KP_API_KEYS || TOKENS.KP || TOKENS.KP_KEYS || TOKENS.KP_API_KEY || TOKENS.KP_KEY);
+        if (!OMDB_API_KEYS.length) OMDB_API_KEYS = ['73ff4450'];
+        if (!KP_API_KEYS.length) KP_API_KEYS = ['5178ab83-699c-4422-937e-f8a759f872ef'];
+
+        var C_LOGGING = false;
+        var CACHE_TIME = 3 * 24 * 60 * 60 * 1000;
+
+        var OMDB_CACHE = 'maxsm_ratings_omdb_cache';
+        var KP_CACHE = 'maxsm_ratings_kp_cache';
+        var ID_MAPPING_CACHE = 'maxsm_ratings_id_mapping_cache';
+
+        var PROXY_TIMEOUT = 5000;
+        var PROXY_LIST = [
+            'https://cors.bwa.workers.dev/',
+            'https://api.allorigins.win/raw?url='
+        ];
+
+        var AGE_RATINGS = {
+            'G': '3+',
+            'PG': '6+',
+            'PG-13': '13+',
+            'R': '17+',
+            'NC-17': '18+',
+            'TV-Y': '0+',
+            'TV-Y7': '7+',
+            'TV-G': '3+',
+            'TV-PG': '6+',
+            'TV-14': '14+',
+            'TV-MA': '17+'
+        };
+
+        var WEIGHTS = {
+            imdb: 0.35,
+            tmdb: 0.15,
+            kp: 0.20,
+            mc: 0.15,
+            rt: 0.15
+        };
+
+        var star_svg = '<svg viewBox="5 5 54 54" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill="none" stroke="white" stroke-width="2" d="M32 18.7461L36.2922 27.4159L46.2682 28.6834L38.9675 35.3631L40.7895 44.8469L32 40.2489L23.2105 44.8469L25.0325 35.3631L17.7318 28.6834L27.7078 27.4159L32 18.7461ZM32 23.2539L29.0241 29.2648L22.2682 30.1231L27.2075 34.6424L25.9567 41.1531L32 37.9918L38.0433 41.1531L36.7925 34.6424L41.7318 30.1231L34.9759 29.2648L32 23.2539Z"/><path fill="none" stroke="white" stroke-width="2" d="M32 9C19.2975 9 9 19.2975 9 32C9 44.7025 19.2975 55 32 55C44.7025 55 55 44.7025 55 32C55 19.2975 44.7025 9 32 9ZM7 32C7 18.1929 18.1929 7 32 7C45.8071 7 57 18.1929 57 32C57 45.8071 45.8071 57 32 57C18.1929 57 7 45.8071 7 32Z"/></svg>';
+        var avg_svg = '<svg width="64" height="64" viewBox="10 10 44 44" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M31.4517 11.3659C31.8429 10.7366 32.7589 10.7366 33.1501 11.3659L40.2946 22.8568C40.4323 23.0782 40.651 23.2371 40.9041 23.2996L54.0403 26.5435C54.7598 26.7212 55.0428 27.5923 54.5652 28.1589L45.8445 38.5045C45.6764 38.7039 45.5929 38.961 45.6117 39.221L46.5858 52.7168C46.6392 53.4559 45.8982 53.9942 45.2117 53.7151L32.6776 48.6182C32.4361 48.52 32.1657 48.52 31.9242 48.6182L19.39 53.7151C18.7036 53.9942 17.9626 53.4559 18.016 52.7168L18.9901 39.221C19.0089 38.961 18.9253 38.7039 18.7573 38.5045L10.0366 28.1589C9.559 27.5923 9.84204 26.7212 10.5615 26.5435L23.6977 23.2996C23.9508 23.2371 24.1695 23.0782 24.3072 22.8568L31.4517 11.3659Z" fill="#FFDF6D"/></svg>';
+        var tmdb_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 150" width="150" height="150"><defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#90cea1"/><stop offset="56%" stop-color="#3cbec9"/><stop offset="100%" stop-color="#00b3e5"/></linearGradient><style>.text-style{font-weight:bold;fill:url(#grad);text-anchor:start;dominant-baseline:middle;textLength:150;lengthAdjust:spacingAndGlyphs;font-size:70px;}</style></defs><text class="text-style" x="0" y="50" textLength="150" lengthAdjust="spacingAndGlyphs">TM</text><text class="text-style" x="0" y="120" textLength="150" lengthAdjust="spacingAndGlyphs">DB</text></svg>';
+        var imdb_svg = '<?xml version="1.0" encoding="utf-8"?><svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.88 122.88" xml:space="preserve"><style type="text/css"><![CDATA[.st0{fill:#F5C518;}]]></style><g><path class="st0" d="M18.43,0h86.02c10.18,0,18.43,8.25,18.43,18.43v86.02c0,10.18-8.25,18.43-18.43,18.43H18.43 C8.25,122.88,0,114.63,0,104.45l0-86.02C0,8.25,8.25,0,18.43,0L18.43,0z"/><path d="M24.96,78.72V44.16h-9.6v34.56H24.96L24.96,78.72z M45.36,44.16L43.2,60.24L42,51.6l-1.2-7.44l-12,0v34.56h8.16v-22.8 l3.36,22.8h6l3.12-23.28v23.28h8.16V44.16H45.36L45.36,44.16z M61.44,78.72V44.16h14.88c3.6,0,6.24,2.64,6.24,6v22.56 c0,3.36-2.64,6-6.24,6H61.44L61.44,78.72z M72.72,50.4l-2.16-0.24v22.56c1.2,0,2.16-0.24,2.4-0.72c0.48-0.48,0.48-1.92,0.48-4.32 V54.24v-2.88L72.72,50.4L72.72,50.4L72.72,50.4z M100.56,52.8h0.72c3.36,0,6.24,2.64,6.24,6v13.92c0,3.36-2.88,6-6.24,6l-0.72,0 c-1.92,0-3.84-0.96-5.04-2.64l-0.48,2.16H86.4V44.16h9.12V55.2C96.72,53.76,98.64,52.8,100.56,52.8L100.56,52.8z M98.64,69.6v-8.16 L98.4,58.8c-0.24-0.48-0.96-0.72-1.44-0.72c-0.48,0-1.2,0.24-1.44,0.72v13.68c0.24,0.48,0.96,0.72,1.44,0.72 c0.48,0,1.44-0.24,1.44-0.72L98.64,69.6L98.64,69.6z"/></g></svg>';
+        var kp_svg = '<svg width="300" height="300" viewBox="0 0 300 300" fill="none" xmlns="http://www.w3.org/2000/svg"><mask id="mask0_1_69" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="300"><circle cx="150" cy="150" r="150" fill="white"/></mask><g mask="url(#mask0_1_69)"><circle cx="150" cy="150" r="150" fill="black"/><path d="M300 45L145.26 127.827L225.9 45H181.2L126.3 121.203V45H89.9999V255H126.3V178.92L181.2 255H225.9L147.354 174.777L300 255V216L160.776 160.146L300 169.5V130.5L161.658 139.494L300 84V45Z" fill="url(#paint0_radial_1_69)"/></g><defs><radialGradient id="paint0_radial_1_69" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(89.9999 45) rotate(45) scale(296.985)"><stop offset="0.5" stop-color="#FF5500"/><stop offset="1" stop-color="#BBFF00"/></radialGradient></defs></svg>';
+        var rt_svg = '<svg xmlns="http://www.w3.org/2000/svg" height="141.25" viewBox="0 0 138.75 141.25" width="138.75"><g fill="#f93208"><path d="m20.154 40.829c-28.149 27.622-13.657 61.011-5.734 71.931 35.254 41.954 92.792 25.339 111.89-5.9071 4.7608-8.2027 22.554-53.467-23.976-78.009z"/><path d="m39.613 39.265 4.7778-8.8607 28.406-5.0384 11.119 9.2082z"/></g><g><path d="m39.436 8.5696 8.9682-5.2826 6.7569 15.479c3.7925-6.3226 13.79-16.316 24.939-4.6684-4.7281 1.2636-7.5161 3.8553-7.7397 8.4768 15.145-4.1697 31.343 3.2127 33.539 9.0911-10.951-4.314-27.695 10.377-41.771 2.334 0.009 15.045-12.617 16.636-19.902 17.076 2.077-4.996 5.591-9.994 1.474-14.987-7.618 8.171-13.874 10.668-33.17 4.668 4.876-1.679 14.843-11.39 24.448-11.425-6.775-2.467-12.29-2.087-17.814-1.475 2.917-3.961 12.149-15.197 28.625-8.476z" fill="#02902e"/></g></svg>';
+        var mc_svg = '<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88" viewBox="0 0 88 88"><circle fill="#001B36" stroke="#FC0" stroke-width="4.6" cx="44" cy="44" r="41.6"/></svg>';
+        var awards_svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36"><path fill="#FFD700" d="M12 2l2.2 6.8H21l-5.5 4 2.1 6.8L12 15.8 6.4 19.6l2.1-6.8L3 8.8h6.8z"/></svg>';
+
+        if (Lampa.Lang && Lampa.Lang.add) {
+            Lampa.Lang.add({
+                maxsm_ratings: { ru: 'Рейтинг и качество', en: 'Rating & Quality', uk: 'Рейтинг і якість', pl: 'Ocena i jakość' },
+                maxsm_ratings_cc: { ru: 'Очистить локальный кеш', en: 'Clear local cache', uk: 'Очистити локальний кеш', pl: 'Wyczyść lokalny cache' },
+                maxsm_ratings_critic: { ru: 'Оценки критиков', en: 'Critic Ratings', uk: 'Оцінки критиків', pl: 'Oceny krytyków' },
+                maxsm_ratings_mode: { ru: 'Средний рейтинг', en: 'Average rating', uk: 'Середній рейтинг', pl: 'Średnia ocena' },
+                maxsm_ratings_mode_normal: { ru: 'Показывать средний рейтинг', en: 'Show average rating', uk: 'Показувати середній рейтинг', pl: 'Pokaż średnią ocenę' },
+                maxsm_ratings_mode_simple: { ru: 'Только средний рейтинг', en: 'Only average rating', uk: 'Лише середній рейтинг', pl: 'Tylko średnia ocena' },
+                maxsm_ratings_mode_noavg: { ru: 'Без среднего рейтинга', en: 'No average', uk: 'Без середнього рейтингу', pl: 'Bez średniej' },
+                maxsm_ratings_icons: { ru: 'Значки', en: 'Icons', uk: 'Значки', pl: 'Ikony' },
+                maxsm_ratings_colors: { ru: 'Цвета', en: 'Colors', uk: 'Кольори', pl: 'Kolory' },
+                maxsm_ratings_avg: { ru: 'ИТОГ', en: 'TOTAL', uk: 'ПІДСУМОК', pl: 'RAZEM' },
+                maxsm_ratings_avg_simple: { ru: 'Оценка', en: 'Rating', uk: 'Оцінка', pl: 'Ocena' },
+                maxsm_ratings_loading: { ru: 'Загрузка', en: 'Loading', uk: 'Завантаження', pl: 'Ładowanie' },
+                maxsm_ratings_oscars: { ru: 'Оскар', en: 'Oscar', uk: 'Оскар', pl: 'Oscar' },
+                maxsm_ratings_emmy: { ru: 'Эмми', en: 'Emmy', uk: 'Еммі', pl: 'Emmy' },
+                maxsm_ratings_awards: { ru: 'Награды', en: 'Awards', uk: 'Нагороди', pl: 'Nagrody' },
+                maxsm_ratings_show_total: { ru: 'Итог', en: 'Total', uk: 'Підсумок', pl: 'Razem' },
+                maxsm_ratings_show_oscars: { ru: 'Оскар', en: 'Oscar', uk: 'Оскар', pl: 'Oscar' },
+                maxsm_ratings_show_awards: { ru: 'Награды', en: 'Awards', uk: 'Нагороди', pl: 'Nagrody' },
+                maxsm_ratings_show_tmdb: { ru: 'TMDB', en: 'TMDB', uk: 'TMDB', pl: 'TMDB' },
+                maxsm_ratings_show_imdb: { ru: 'IMDB', en: 'IMDb', uk: 'IMDb', pl: 'IMDb' },
+                maxsm_ratings_show_kp: { ru: 'Кинопоиск', en: 'Kinopoisk', uk: 'Кінопошук', pl: 'Kinopoisk' },
+                maxsm_ratings_show_rt: { ru: 'Tomatoes', en: 'Tomatoes', uk: 'Tomatoes', pl: 'Tomatoes' },
+                maxsm_ratings_show_mc: { ru: 'Metacritic', en: 'Metacritic', uk: 'Metacritic', pl: 'Metacritic' },
+                maxsm_ratings_quality: { ru: 'Качество внутри карточек', en: 'Quality inside cards', uk: 'Якість всередині карток', pl: 'Jakość w kartach' },
+                maxsm_ratings_quality_inlist: { ru: 'Качество на карточках', en: 'Quality on cards', uk: 'Якість на картках', pl: 'Jakość na kartach' },
+                maxsm_ratings_quality_tv: { ru: 'Качество для сериалов', en: 'Quality for series', uk: 'Якість для серіалів', pl: 'Jakość dla seriali' }
+            });
+        }
+
+        if (!document.getElementById('maxsm_ratings_css')) {
+            var style = document.createElement('style');
+            style.id = 'maxsm_ratings_css';
+            style.textContent = '.full-start-new__rate-line{display:flex;flex-wrap:wrap;column-gap:.22em;row-gap:.22em}.full-start-new__rate-line>*{margin:0!important}.full-start-new__rate-line .full-start__rate{display:inline-flex!important;align-items:center!important;justify-content:flex-start!important;gap:.28em!important;margin:0!important;width:auto!important}.full-start-new__rate-line .full-start__rate.hide{display:none!important}.full-start-new__rate-line .full-start__rate>div{margin:0!important}.full-start__rate>div:last-child{padding:.2em .35em}.rate--green{color:#4caf50}.rate--lime{color:#cddc39}.rate--orange{color:#ff9800}.rate--red{color:#f44336}.rate--gold{color:gold}.rate--icon{height:1.8em}.maxsm-quality{min-width:2.8em;text-align:center}.maxsm-icon-container{display:inline-flex;align-items:center;justify-content:center;height:1.6em;width:1.6em;overflow:hidden;vertical-align:middle;padding:0}.maxsm-icon-container svg{width:100%;height:100%;object-fit:contain}.full-start-new__rate-line .source--name{display:inline-flex;align-items:center;justify-content:center;min-width:2.2em}.full-start-new__rate-line .source--name.rate--icon{min-width:2.2em}.applecation__ratings:not(.full-start-new__rate-line){display:none!important}.applecation .full-start-new__rate-line.applecation__ratings{height:auto!important;overflow:visible!important;opacity:1!important;pointer-events:auto!important;margin:0 0 .5em 0!important}';
+            document.head.appendChild(style);
+        }
+        
+        if (!document.getElementById('maxsm_ratings_modal_css')) {
+            var modalStyle = document.createElement('style');
+            modalStyle.id = 'maxsm_ratings_modal_css';
+            modalStyle.textContent = '.maxsm-modal-ratings{padding:1.25em;font-size:1.4em;line-height:1.6}.maxsm-modal-rating-line{padding:.5em 0;border-bottom:.0625em solid rgba(255,255,255,.1)}.maxsm-modal-rating-line:last-child{border-bottom:none}.maxsm-modal-imdb{color:#f5c518}.maxsm-modal-kp{color:#4CAF50}.maxsm-modal-tmdb{color:#01b4e4}.maxsm-modal-rt{color:#fa320a}.maxsm-modal-mc{color:#6dc849}.maxsm-modal-oscars,.maxsm-modal-emmy,.maxsm-modal-awards{color:#FFD700}';
+            document.head.appendChild(modalStyle);
+        }
+
+        if (!localStorage.getItem('maxsm_ratings_awards')) localStorage.setItem('maxsm_ratings_awards', 'true');
+        if (!localStorage.getItem('maxsm_ratings_critic')) localStorage.setItem('maxsm_ratings_critic', 'true');
+        if (!localStorage.getItem('maxsm_ratings_colors')) localStorage.setItem('maxsm_ratings_colors', 'false');
+        if (!localStorage.getItem('maxsm_ratings_icons')) localStorage.setItem('maxsm_ratings_icons', 'false');
+        if (!localStorage.getItem('maxsm_ratings_mode')) localStorage.setItem('maxsm_ratings_mode', '0');
+        if (!localStorage.getItem('maxsm_ratings_show_total')) localStorage.setItem('maxsm_ratings_show_total', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_oscars')) localStorage.setItem('maxsm_ratings_show_oscars', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_awards')) localStorage.setItem('maxsm_ratings_show_awards', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_tmdb')) localStorage.setItem('maxsm_ratings_show_tmdb', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_imdb')) localStorage.setItem('maxsm_ratings_show_imdb', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_kp')) localStorage.setItem('maxsm_ratings_show_kp', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_rt')) localStorage.setItem('maxsm_ratings_show_rt', 'true');
+        if (!localStorage.getItem('maxsm_ratings_show_mc')) localStorage.setItem('maxsm_ratings_show_mc', 'true');
+        if (!localStorage.getItem('maxsm_ratings_quality')) localStorage.setItem('maxsm_ratings_quality', 'true');
+        if (!localStorage.getItem('maxsm_ratings_quality_inlist')) localStorage.setItem('maxsm_ratings_quality_inlist', 'true');
+        if (!localStorage.getItem('maxsm_ratings_quality_tv')) localStorage.setItem('maxsm_ratings_quality_tv', 'true');
 
         function getRandomToken(arr) {
             if (!arr || !arr.length) return '';
