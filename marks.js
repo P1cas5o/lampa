@@ -3709,7 +3709,320 @@
             });
         }
 
-       
+        function updateHiddenElements(ratings, render) {
+            if (!render) return;
+
+            var pgElement = $('.full-start__pg.hide', render);
+            if (pgElement.length && ratings.ageRating) {
+                var invalidRatings = ['N/A', 'Not Rated', 'Unrated', 'NR'];
+                if (invalidRatings.indexOf(ratings.ageRating) === -1) {
+                    var localizedRating = AGE_RATINGS[ratings.ageRating] || ratings.ageRating;
+                    pgElement.removeClass('hide').text(localizedRating);
+                }
+            }
+
+            function setRateVisible(selector, value) {
+                var el = $(selector, render);
+                if (!el.length) return;
+                var ok = value != null && value !== '' && !isNaN(value);
+                if (ok) {
+                    el.removeClass('hide').find('> div').eq(0).text(parseFloat(value).toFixed(1));
+                } else {
+                    el.addClass('hide').find('> div').eq(0).text('');
+                }
+            }
+
+            var imdbValue = null;
+            if (ratings.imdb && !isNaN(ratings.imdb)) imdbValue = ratings.imdb;
+            else if (ratings.imdb_kp && !isNaN(ratings.imdb_kp)) imdbValue = ratings.imdb_kp;
+            var showImdb = localStorage.getItem('maxsm_ratings_show_imdb') !== 'false';
+            var showKp = localStorage.getItem('maxsm_ratings_show_kp') !== 'false';
+            var showTmdb = localStorage.getItem('maxsm_ratings_show_tmdb') !== 'false';
+            setRateVisible('.rate--imdb', showImdb ? imdbValue : null);
+            setRateVisible('.rate--kp', showKp ? ratings.kp : null);
+            setRateVisible('.rate--tmdb', showTmdb ? ratings.tmdb : null);
+        }
+
+        function insertRatings(rtRating, mcRating, oscars, awards, emmy, render) {
+            if (!render) return;
+            var rateLine = $('.full-start-new__rate-line', render);
+            if (!rateLine.length) return;
+
+            var lastRate = $('.full-start__rate:last', rateLine);
+
+            var showRT = localStorage.getItem('maxsm_ratings_show_rt') !== 'false';
+            var showMC = localStorage.getItem('maxsm_ratings_show_mc') !== 'false';
+            var showAwards = localStorage.getItem('maxsm_ratings_show_awards') !== 'false';
+            var showOscar = localStorage.getItem('maxsm_ratings_show_oscars') !== 'false';
+            var showEmmy = false;
+            var showColors = localStorage.getItem('maxsm_ratings_colors') === 'true';
+
+            function upsertNumberRate(className, value, label, opts) {
+                var existing = $('.' + className, rateLine);
+                var enabled = opts && opts.enabled;
+                var okValue = value != null && value !== '' && !isNaN(value) && (!opts || !opts.min || value >= opts.min);
+                if (!enabled || !okValue) {
+                    if (existing.length) existing.remove();
+                    return;
+                }
+                if (!existing.length) {
+                    var el = $('<div class="full-start__rate ' + className + '"><div></div><div class="source--name"></div></div>');
+                    if (opts && opts.gold) el.addClass('rate--gold');
+                    el.find('> div').eq(1).text(label);
+                    if (className === 'rate--rt') {
+                        if (lastRate.length) el.insertAfter(lastRate);
+                        else rateLine.append(el);
+                    } else if (className === 'rate--mc') {
+                        var afterRt = $('.rate--rt', rateLine);
+                        if (afterRt.length) el.insertAfter(afterRt);
+                        else if (lastRate.length) el.insertAfter(lastRate);
+                        else rateLine.prepend(el);
+                    } else {
+                        rateLine.prepend(el);
+                    }
+                    existing = el;
+                }
+                existing.find('> div').eq(0).text(value);
+                if (opts && opts.gold) {
+                    if (showColors) existing.addClass('rate--gold');
+                    else existing.removeClass('rate--gold');
+                }
+            }
+
+            upsertNumberRate('rate--rt', rtRating, 'Tomatoes', { enabled: showRT });
+            upsertNumberRate('rate--mc', mcRating, 'Metacritic', { enabled: showMC });
+            upsertNumberRate('rate--awards', awards, (Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_awards') : 'Awards'), { enabled: showAwards, gold: true, min: 1 });
+            upsertNumberRate('rate--oscars', oscars, (Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_oscars') : 'Oscar'), { enabled: showOscar, gold: true, min: 1 });
+            upsertNumberRate('rate--emmy', emmy, (Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_emmy') : 'Emmy'), { enabled: showEmmy, gold: true, min: 1 });
+        }
+
+        function reorderRateLine(render) {
+            if (!render) return;
+            var rateLine = $('.full-start-new__rate-line', render).first();
+            if (!rateLine.length) return;
+
+            var order = ['rate--tmdb', 'rate--imdb', 'rate--kp', 'rate--rt', 'rate--mc', 'rate--oscars', 'rate--awards', 'rate--avg'];
+            var status = rateLine.find('.full-start__status').detach();
+
+            for (var i = 0; i < order.length; i++) {
+                var el = rateLine.find('.' + order[i]).first();
+                if (el.length) rateLine.append(el.detach());
+            }
+
+            if (status.length) rateLine.append(status);
+        }
+
+        function calculateAverageRating(render) {
+            if (!render) return;
+            var rateLine = $('.full-start-new__rate-line', render);
+            if (!rateLine.length) return;
+
+            $('.full-start__rate', rateLine).show();
+
+            var ratings = {
+                imdb: parseFloat($('.rate--imdb div:first', rateLine).text()) || 0,
+                tmdb: parseFloat($('.rate--tmdb div:first', rateLine).text()) || 0,
+                kp: parseFloat($('.rate--kp div:first', rateLine).text()) || 0,
+                mc: (parseFloat($('.rate--mc div:first', rateLine).text()) || 0) / 10,
+                rt: (parseFloat($('.rate--rt div:first', rateLine).text()) || 0) / 10
+            };
+
+            var totalWeight = 0;
+            var weightedSum = 0;
+            var ratingsCount = 0;
+
+            for (var key in ratings) {
+                if (ratings.hasOwnProperty(key) && !isNaN(ratings[key]) && ratings[key] > 0) {
+                    weightedSum += ratings[key] * WEIGHTS[key];
+                    totalWeight += WEIGHTS[key];
+                    ratingsCount++;
+                }
+            }
+
+            $('.rate--avg', rateLine).remove();
+
+            var mode = parseInt(localStorage.getItem('maxsm_ratings_mode'), 10);
+            var showTotal = localStorage.getItem('maxsm_ratings_show_total') !== 'false';
+            if (showTotal && totalWeight > 0 && (ratingsCount > 1 || mode === 1) && mode !== 2) {
+                var averageRating = (weightedSum / totalWeight).toFixed(1);
+                var colorClass = getRatingClass(averageRating);
+                var avgLabel = (Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_avg') : 'TOTAL');
+
+                if (mode === 1) {
+                    avgLabel = (Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_avg_simple') : 'Rating');
+                    $('.full-start__rate', rateLine).not('.rate--oscars, .rate--avg, .rate--awards').hide();
+                }
+
+                var avgElement = $('<div class="full-start__rate rate--avg ' + colorClass + '"><div>' + averageRating + '</div><div class="source--name">' + avgLabel + '</div></div>');
+                if (localStorage.getItem('maxsm_ratings_colors') !== 'true') avgElement.removeClass(colorClass);
+                var status = rateLine.find('.full-start__status').first();
+                if (status.length) avgElement.insertBefore(status);
+                else rateLine.append(avgElement);
+            }
+        }
+
+        function showRatingsModal(render) {
+            if (!render || !Lampa.Modal) return;
+            var rateLine = $('.full-start-new__rate-line', render);
+            if (!rateLine.length) return;
+            
+            var showColors = localStorage.getItem('maxsm_ratings_colors') === 'true';
+            var modalContent = $('<div class="maxsm-modal-ratings"></div>');
+            
+            function isNumericText(txt) {
+                if (!txt) return false;
+                var cleaned = String(txt).trim().replace(',', '.');
+                var n = parseFloat(cleaned);
+                return !isNaN(n) && isFinite(n);
+            }
+            
+            function extractValue(element) {
+                if (!element || !element.length) return '';
+                var divs = element.children('div');
+                for (var i = 0; i < divs.length; i++) {
+                    var t = divs.eq(i).text().trim();
+                    if (isNumericText(t)) return t;
+                }
+                var fallback = element.children().eq(0).text();
+                return (fallback || '').trim();
+            }
+            
+            var ratingOrder = [
+                'rate--tmdb',
+                'rate--imdb',
+                'rate--kp',
+                'rate--rt',
+                'rate--mc',
+                'rate--oscars',
+                'rate--awards',
+                'rate--avg'
+            ];
+            
+            for (var i = 0; i < ratingOrder.length; i++) {
+                var className = ratingOrder[i];
+                var element = $('.' + className, rateLine);
+                if (!element.length) continue;
+                if (element.hasClass('hide') || !element.is(':visible')) continue;
+                
+                var value = extractValue(element);
+                if (!value) continue;
+                
+                var numericValue = parseFloat(String(value).replace(',', '.'));
+                var label = '';
+                
+                switch (className) {
+                    case 'rate--avg':
+                        label = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_mode') : 'Средний рейтинг';
+                        break;
+                    case 'rate--oscars':
+                        label = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_oscars') : 'Оскар';
+                        break;
+                    case 'rate--emmy':
+                        label = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_emmy') : 'Эмми';
+                        break;
+                    case 'rate--awards':
+                        label = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_awards') : 'Награды';
+                        break;
+                    case 'rate--tmdb':
+                        label = 'TMDB';
+                        break;
+                    case 'rate--imdb':
+                        label = 'IMDb';
+                        break;
+                    case 'rate--kp':
+                        label = 'Кинопоиск';
+                        break;
+                    case 'rate--rt':
+                        label = 'Rotten Tomatoes';
+                        break;
+                    case 'rate--mc':
+                        label = 'Metacritic';
+                        break;
+                }
+                
+                var item = $('<div class="maxsm-modal-rating-line"></div>');
+                if (showColors) {
+                    if (className === 'rate--avg') {
+                        var colorClass = getRatingClass(numericValue);
+                        if (colorClass) item.addClass(colorClass);
+                    } else {
+                        item.addClass('maxsm-modal-' + className.replace('rate--', ''));
+                    }
+                }
+                
+                item.text(value + ' - ' + label);
+                modalContent.append(item);
+            }
+            
+            Lampa.Modal.open({
+                title: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_avg_simple') : 'Оценка',
+                html: modalContent,
+                width: 600,
+                onBack: function () {
+                    Lampa.Modal.close();
+                    if (Lampa.Controller) Lampa.Controller.toggle('content');
+                    return true;
+                }
+            });
+        }
+
+        function insertIcons(render) {
+            if (!render) return;
+            var showIcons = localStorage.getItem('maxsm_ratings_icons') === 'true';
+
+            function isNumericText(txt) {
+                if (!txt) return false;
+                var cleaned = String(txt).trim().replace(',', '.');
+                var n = parseFloat(cleaned);
+                return !isNaN(n) && isFinite(n);
+            }
+
+            function apply(className, svg) {
+                var Element = $('.' + className, render);
+                if (!Element.length) return;
+                Element.find('.maxsm-icon-container').remove();
+
+                if (showIcons) {
+                    var target = Element.find('.source--name');
+                    if (!target.length) {
+                        var childDivs = Element.children('div');
+                        if (childDivs.length >= 2) {
+                            var t0 = childDivs.eq(0).text().trim();
+                            var t1 = childDivs.eq(1).text().trim();
+                            if (isNumericText(t0) && !isNumericText(t1)) target = childDivs.eq(1);
+                            else if (isNumericText(t1) && !isNumericText(t0)) target = childDivs.eq(0);
+                            else target = childDivs.eq(1);
+                        }
+                    }
+
+                    if (target.length) {
+                        var iconWrap = $('<div></div>');
+                        iconWrap.addClass('maxsm-icon-container');
+                        iconWrap.html(svg);
+                        if (!target.data('original-html')) target.data('original-html', target.html());
+                        target.html(iconWrap);
+                        target.addClass('rate--icon');
+                    }
+                } else {
+                    var t = Element.find('.rate--icon');
+                    if (t.length && t.data('original-html')) {
+                        t.html(t.data('original-html'));
+                        t.removeClass('rate--icon');
+                        t.removeData('original-html');
+                    }
+                }
+            }
+
+            apply('rate--imdb', imdb_svg);
+            apply('rate--kp', kp_svg);
+            apply('rate--tmdb', tmdb_svg);
+            apply('rate--oscars', awards_svg);
+            apply('rate--emmy', awards_svg);
+            apply('rate--awards', awards_svg);
+            apply('rate--rt', rt_svg);
+            apply('rate--mc', mc_svg);
+            apply('rate--avg', avg_svg);
+        }
 
         function updateQualityElement(text, render) {
             if (!render) return;
@@ -3745,8 +4058,334 @@
             });
         }
 
+        function fetchAdditionalRatings(card, render) {
+            if (!render || !card || !card.id) return;
+            var localCurrentCard = card.id;
 
-    
+            var normalizedCard = {
+                id: card.id,
+                tmdb: card.vote_average || null,
+                kinopoisk_id: card.kinopoisk_id,
+                imdb_id: card.imdb_id || card.imdb || null,
+                title: card.title || card.name || '',
+                original_title: card.original_title || card.original_name || '',
+                type: getCardType(card),
+                release_date: card.release_date || card.first_air_date || ''
+            };
+
+            var rateLine = $('.full-start-new__rate-line.applecation__ratings', render);
+            if (!rateLine.length) {
+                var insertPoint = $('.applecation__meta', render);
+                if (!insertPoint.length) insertPoint = $('.full-start-new__title', render);
+                if (!insertPoint.length) insertPoint = $(render);
+
+                rateLine = $('<div class="full-start-new__rate-line applecation__ratings show"></div>');
+                rateLine.append('<div class="full-start__rate rate--tmdb"><div></div><div class="source--name">TMDB</div></div>');
+                rateLine.append('<div class="full-start__rate rate--imdb hide"><div></div><div class="source--name">IMDb</div></div>');
+                rateLine.append('<div class="full-start__rate rate--kp hide"><div></div><div class="source--name">Кинопоиск</div></div>');
+                rateLine.append('<div class="full-start__status hide"></div>');
+                rateLine.insertAfter(insertPoint);
+            }
+            else if (!$('.rate--tmdb', rateLine).length) {
+                rateLine.append('<div class="full-start__rate rate--tmdb"><div></div><div class="source--name">TMDB</div></div>');
+                rateLine.append('<div class="full-start__rate rate--imdb hide"><div></div><div class="source--name">IMDb</div></div>');
+                rateLine.append('<div class="full-start__rate rate--kp hide"><div></div><div class="source--name">Кинопоиск</div></div>');
+                rateLine.append('<div class="full-start__status hide"></div>');
+            }
+
+            if (rateLine.length) {
+                var tmdbEl = $('.rate--tmdb', render);
+                if (tmdbEl.length && normalizedCard.tmdb && !isNaN(normalizedCard.tmdb)) {
+                    tmdbEl.removeClass('hide').find('> div').eq(0).text(parseFloat(normalizedCard.tmdb).toFixed(1));
+                }
+                rateLine.addClass('done');
+                addLoadingAnimation(render);
+            }
+
+            syncQualityFromJacred(card, render);
+
+            var cacheKey = normalizedCard.type + '_' + (normalizedCard.imdb_id || normalizedCard.id);
+            var cachedData = getOmdbCache(cacheKey);
+            var cachedKpData = getKpCache(cacheKey);
+            var ratingsData = {};
+            ratingsData.tmdb = normalizedCard.tmdb;
+
+            if (cachedKpData) {
+                ratingsData.kp = cachedKpData.kp;
+                ratingsData.imdb_kp = cachedKpData.imdb;
+            }
+
+            if (cachedData) {
+                ratingsData.rt = cachedData.rt;
+                ratingsData.mc = cachedData.mc;
+                ratingsData.imdb = cachedData.imdb;
+                ratingsData.ageRating = cachedData.ageRating;
+                ratingsData.oscars = cachedData.oscars;
+                ratingsData.emmy = cachedData.emmy;
+                ratingsData.awards = cachedData.awards;
+            }
+
+            renderNow();
+
+            var pending = 0;
+            function startPending() { pending++; }
+            function endPending() {
+                pending = Math.max(0, pending - 1);
+                if (pending === 0) finalizeUI();
+            }
+
+            if (!cachedKpData) {
+                startPending();
+                getKPRatings(normalizedCard, getRandomToken(KP_API_KEYS), localCurrentCard, function (kpRatings) {
+                    if (kpRatings) {
+                        ratingsData.kp = kpRatings.kinopoisk || null;
+                        ratingsData.imdb_kp = kpRatings.imdb || null;
+                        saveKpCache(cacheKey, { kp: ratingsData.kp, imdb: ratingsData.imdb_kp });
+                    }
+                    renderNow();
+                    endPending();
+                });
+            }
+
+            if (!cachedData) {
+                startPending();
+                if (normalizedCard.imdb_id) {
+                    fetchOmdbRatings(normalizedCard, localCurrentCard, function (omdbData) {
+                        if (omdbData) {
+                            ratingsData.rt = omdbData.rt;
+                            ratingsData.mc = omdbData.mc;
+                            ratingsData.imdb = omdbData.imdb;
+                            ratingsData.ageRating = omdbData.ageRating;
+                            ratingsData.oscars = omdbData.oscars;
+                            ratingsData.emmy = omdbData.emmy;
+                            ratingsData.awards = omdbData.awards;
+                            saveOmdbCache(cacheKey, omdbData);
+                        }
+                        renderNow();
+                        endPending();
+                    });
+                } else {
+                    getImdbIdFromTmdb(normalizedCard.id, normalizedCard.type, localCurrentCard, function (newImdbId) {
+                        if (newImdbId) {
+                            normalizedCard.imdb_id = newImdbId;
+                            cacheKey = normalizedCard.type + '_' + newImdbId;
+                            fetchOmdbRatings(normalizedCard, localCurrentCard, function (omdbData) {
+                                if (omdbData) {
+                                    ratingsData.rt = omdbData.rt;
+                                    ratingsData.mc = omdbData.mc;
+                                    ratingsData.imdb = omdbData.imdb;
+                                    ratingsData.ageRating = omdbData.ageRating;
+                                    ratingsData.oscars = omdbData.oscars;
+                                    ratingsData.emmy = omdbData.emmy;
+                                    ratingsData.awards = omdbData.awards;
+                                    saveOmdbCache(cacheKey, omdbData);
+                                }
+                                renderNow();
+                                endPending();
+                            });
+                        } else {
+                            renderNow();
+                            endPending();
+                        }
+                    });
+                }
+            }
+
+            if (pending === 0) finalizeUI();
+
+            function renderNow() {
+                try { render.data('maxsm_ratings_data', ratingsData); } catch (e) { }
+                insertRatings(ratingsData.rt, ratingsData.mc, ratingsData.oscars, ratingsData.awards, ratingsData.emmy, render);
+                updateHiddenElements(ratingsData, render);
+                calculateAverageRating(render);
+                insertIcons(render);
+                reorderRateLine(render);
+                $('.full-start__rate', render).off('click.maxsm-ratings-modal').on('click.maxsm-ratings-modal', function (e) {
+                    e.stopPropagation();
+                    showRatingsModal(render);
+                });
+                rateLine.css('visibility', 'visible');
+            }
+
+            function finalizeUI() {
+                removeLoadingAnimation(render);
+            }
+        }
+
+        function refreshActiveFullRatings() {
+            try {
+                var act = Lampa.Activity && Lampa.Activity.active && Lampa.Activity.active();
+                if (!act || act.component !== 'full') return;
+                var render = act.activity && act.activity.render && act.activity.render();
+                if (!render) return;
+                var data = render.data ? render.data('maxsm_ratings_data') : null;
+                if (!data) data = {};
+                insertRatings(data.rt, data.mc, data.oscars, data.awards, data.emmy, render);
+                updateHiddenElements(data, render);
+                calculateAverageRating(render);
+                insertIcons(render);
+                reorderRateLine(render);
+            } catch (e) { }
+        }
+
+        if (Lampa.SettingsApi && Lampa.SettingsApi.addComponent) {
+            Lampa.SettingsApi.addComponent({ component: 'maxsm_ratings', name: (Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings') : 'Рейтинг и качество'), icon: star_svg });
+
+            var modeValue = {};
+            modeValue[0] = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_mode_normal') : 'Показывать средний рейтинг';
+            modeValue[1] = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_mode_simple') : 'Только средний рейтинг';
+            modeValue[2] = Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_mode_noavg') : 'Без среднего рейтинга';
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_mode', type: 'select', values: modeValue, default: 0 },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_mode') : 'Средний рейтинг', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_awards', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_awards') : 'Награды', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_critic', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_critic') : 'Оценки критиков', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_total', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_total') : 'Итог', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_oscars', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_oscars') : 'Оскар', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_awards', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_awards') : 'Награды', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_tmdb', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_tmdb') : 'TMDB', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_imdb', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_imdb') : 'IMDB', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_kp', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_kp') : 'Кинопоиск', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_rt', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_rt') : 'Tomatoes', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_show_mc', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_show_mc') : 'Metacritic', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_colors', type: 'trigger', default: false },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_colors') : 'Цвета', description: '' },
+                onChange: function () { refreshActiveFullRatings(); }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_icons', type: 'trigger', default: false },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_icons') : 'Значки', description: '' },
+                onChange: function () {
+                    try {
+                        var act = Lampa.Activity.active();
+                        if (!act || act.component !== 'full') return;
+                        var render = act.activity && act.activity.render && act.activity.render();
+                        insertIcons(render);
+                    } catch (e) { }
+                }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_quality', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_quality') : 'Качество внутри карточек', description: '' },
+                onChange: function () { }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_quality_inlist', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_quality_inlist') : 'Качество на карточках', description: '' },
+                onChange: function (value) {
+                    if (window.FLIXIO_TOGGLE_JACRED_CARD_MARKS) window.FLIXIO_TOGGLE_JACRED_CARD_MARKS(value === 'true');
+                }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_quality_tv', type: 'trigger', default: true },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_quality_tv') : 'Качество для сериалов', description: '' },
+                onChange: function () { }
+            });
+
+            Lampa.SettingsApi.addParam({
+                component: 'maxsm_ratings',
+                param: { name: 'maxsm_ratings_cc', type: 'button' },
+                field: { name: Lampa.Lang ? Lampa.Lang.translate('maxsm_ratings_cc') : 'Очистить локальный кеш' },
+                onChange: function () {
+                    localStorage.removeItem(OMDB_CACHE);
+                    localStorage.removeItem(KP_CACHE);
+                    localStorage.removeItem(ID_MAPPING_CACHE);
+                    window.location.reload();
+                }
+            });
+        }
+
+        if (Lampa.Listener && Lampa.Listener.follow) {
+            Lampa.Listener.follow('full', function (e) {
+                if (e.type !== 'complite') return;
+                var render = e.object && e.object.activity && e.object.activity.render && e.object.activity.render();
+                var movie = e.data && e.data.movie;
+                fetchAdditionalRatings(movie, render);
+            });
+        }
+
+        window.maxsmRatingsPlugin = true;
+    }
+
+    function initKinoogladModule() {
+        if (window.plugin_kinoohlyad_ready) return;
+        window.plugin_kinoohlyad_ready = true;
+        
         // Только очищаем старые каналы по умолчанию, не трогаем пользовательские
         console.log('Kinooglad: Checking for old default channels');
         
