@@ -1093,7 +1093,7 @@
             tabAlt.addClass('icon-picker-tab--active');
             tabLampa.removeClass('icon-picker-tab--active');
         });
-        loadStatus.text('Загрузка…');
+        loadStatus.text('Завантаження…');
         var modalOpened = false;
         function openModal() {
             if (modalOpened) return;
@@ -1135,7 +1135,7 @@
                     });
                     wrap.append(altCell);
                 });
-                loadStatus.text('Альтернативные: ' + newEntries.length + ' · вкладка Lampa: ' + icons.length);
+                loadStatus.text('Альтернативні: ' + newEntries.length + ' · вкладка Lampa: ' + icons.length);
             } else {
                 loadStatus.text('Вкладка Lampa: ' + icons.length);
             }
@@ -1176,7 +1176,7 @@
 
     function openIconPicker(btn, btnId, defaultIconHtml, listItem) {
         buildIconPicker({
-            title: 'Иконка кнопки',
+            title: 'Іконка кнопки',
             defaultIconHtml: defaultIconHtml,
             onChoice: function(isDefault, chosenHtml) {
                 var stored = getCustomIcons();
@@ -1834,7 +1834,7 @@
         if (typeof Lampa.Input !== 'undefined' && typeof Lampa.Input.edit === 'function') {
             Lampa.Input.edit({
                 free: true,
-                title: 'Название папки',
+                title: 'Назва папки',
                 nosave: true,
                 value: '',
                 nomic: true
@@ -2045,7 +2045,7 @@
             '<span class="menu-edit-list__create-folder-spacer"></span>' +
             '<div class="menu-edit-list__create-folder-inner">' +
             '<div class="menu-edit-list__icon menu-edit-list__icon--viewmode">' + getViewModeToolbarSvg(currentMode) + '</div>' +
-            '<div class="menu-edit-list__title menu-edit-list__toolbar-label buttons-plugin-ui-text">Виигляд кнопок: ' + labels[currentMode] + '</div>' +
+            '<div class="menu-edit-list__title menu-edit-list__toolbar-label buttons-plugin-ui-text">Вигляд кнопок: ' + labels[currentMode] + '</div>' +
             '</div>' +
             '<span class="menu-edit-list__create-folder-spacer"></span></div>');
         modeBtn.on('hover:enter', function() {
@@ -2088,6 +2088,49 @@
                 '<div class="menu-edit-list__delete selector">' +
                 '<svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">' +
                 '<rect x="1.89111" y="1.78369" width="21.793" height="21.793" rx="3.5" stroke="currentColor" stroke-width="3"/>' +
+                         '<path d="M9.5 9.5L16.5 16.5M16.5 9.5L9.5 16.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div></div>');
+
+item.find('.menu-edit-list__icon').append(folderIcon);
+item.data('itemType', 'folder');
+item.data('folderId', folder.id);
+
+item.find('.menu-edit-list__change-name').on('hover:enter', function() {
+    openFolderNamePicker(folder, item);
+});
+
+item.find('.menu-edit-list__change-icon').on('hover:enter', function() {
+    openFolderIconPicker(folder, item);
+});
+
+item.find('.menu-edit-list__change-color').on('hover:enter', function() {
+    openColorPickerModal(folder.id);
+});
+
+item.find('.move-up').on('hover:enter', function() {
+    var prev = item.prev('.menu-edit-list__item');
+    if (prev.length) {
+        item.insertBefore(prev);
+        saveItemOrder();
+    }
+});
+
+item.find('.move-down').on('hover:enter', function() {
+    var next = item.next('.menu-edit-list__item');
+    if (next.length) {
+        item.insertAfter(next);
+        saveItemOrder();
+    }
+});
+
+item.find('.menu-edit-list__delete').on('hover:enter', function() {
+    deleteFolder(folder.id);
+    item.remove();
+    saveItemOrder();
+    applyChanges();
+});
+
+return item;
+}
                 '<path d="M9.5 9.5L16.5 16.5M16.5 9.5L9.5 16.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div></div>');
             item.find('.menu-edit-list__icon').append(folderIcon);
             item.data('folderId', folder.id);
