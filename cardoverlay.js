@@ -3025,7 +3025,7 @@
         applyDefaults();
         Lampa.SettingsApi.addComponent({
             component: 'card_overlay',
-            name: 'Интерфейс Мод',
+            name: 'Інтерфейс Мод',
             icon: '<svg height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="21" height="21" rx="2" fill="white"></rect><mask id="path-2-inside-1_154_24" fill="white"><rect x="2" y="27" width="17" height="17" rx="2"></rect></mask><rect x="2" y="27" width="17" height="17" rx="2" stroke="white" stroke-width="6" mask="url(#path-2-inside-1_154_24)"></rect><rect x="27" y="2" width="17" height="17" rx="2" fill="white"></rect><rect x="27" y="34" width="17" height="3" fill="white"></rect><rect x="34" y="44" width="17" height="3" transform="rotate(-90 34 44)" fill="white"></rect></svg>'
         });
         Lampa.SettingsApi.addParam({
@@ -3152,7 +3152,7 @@
         Lampa.SettingsApi.addParam({
             component: 'card_overlay',
             param: { name: 'card_overlay_debug', type: 'trigger', default: false },
-            field: { name: 'Режим отладки', description: 'Выводить ошибки плагина в консоль' },
+            field: { name: 'Режим налагодження', description: 'Виводити помилки плагіна в консоль' },
             onChange: function (v) {
                 DEBUG = isTruthy(v);
                 updateSettingsKeepFocus('card_overlay_debug');
@@ -3163,7 +3163,7 @@
             var $interface = $('.settings-folder[data-component="interface"]');
             if (!$interface.length) $interface = $('.settings-folder').filter(function () { return $(this).find('.settings-folder__name').text().trim() === 'Интерфейс'; });
             var $mod = $('.settings-folder[data-component="card_overlay"]');
-            if (!$mod.length) $mod = $('.settings-folder').filter(function () { return $(this).find('.settings-folder__name').text().trim() === 'Интерфейс Мод'; });
+            if (!$mod.length) $mod = $('.settings-folder').filter(function () { return $(this).find('.settings-folder__name').text().trim() === 'Інтерфейс Мод'; });
             if ($interface.length && $mod.length && $mod.prev()[0] !== $interface[0]) $mod.insertAfter($interface);
         }
         _settingsArranger = moveAfterInterface;
