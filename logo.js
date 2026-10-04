@@ -49,7 +49,7 @@
 		}
 
 		function getCacheKey(type, id, lang) {
-			return "logo_cache_width_based_v1_" + type + "_" + id + "_" + lang;
+			return "logo_cache_width_based_v3_" + type + "_" + id + "_" + lang;
 		}
 
 		function applyFinalStyles(img, container, has_tagline, text_height) {
@@ -82,6 +82,11 @@
 
 			var use_text_height = Lampa.Storage.get("logo_use_text_height", false);
 
+			// Очищаємо попередні інлайн-стилі розмірів
+			img.style.width = "";
+			img.style.height = "";
+			img.style.maxHeight = "";
+
 			if (use_text_height && text_height) {
 				var factor = parseFloat(Lampa.Storage.get("logo_height_factor", "1.0"));
 				var calc_height = text_height * factor;
@@ -102,17 +107,16 @@
 				if (is_mobile) {
 					img.style.width = "100%";
 					img.style.height = "auto";
-					img.style.maxHeight = "none";
 				} else {
-					img.style.width = custom_width + "em";
-					img.style.height = "auto";
-					img.style.maxHeight = "none";
-				}
-
-				if (custom_height && !is_mobile) {
-					img.style.maxHeight = custom_height + "em";
-					img.style.height = custom_height + "em";
-					img.style.width = "auto";
+					if (custom_height) {
+						img.style.height = custom_height + "em";
+						img.style.maxHeight = custom_height + "em";
+						img.style.width = "auto";
+					} else {
+						img.style.width = custom_width + "em";
+						img.style.height = "auto";
+						img.style.maxHeight = "none";
+					}
 				}
 			}
 
@@ -569,7 +573,7 @@
 						var keys = [];
 						for (var i = 0; i < localStorage.length; i++) {
 							var key = localStorage.key(i);
-							if (key.indexOf("logo_cache_width_based_v1_") !== -1) {
+							if (key.indexOf("logo_cache_width_based_v3_") !== -1) {
 								keys.push(key);
 							}
 						}
