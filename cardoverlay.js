@@ -2491,7 +2491,7 @@
         var type = getTypeLabelMediaType(meta, card);
         if (type) $(card).attr('data-card-overlay-native-type', 'hide');
         else $(card).removeAttr('data-card-overlay-native-type');
-        if (!view.length) { clearCardTypeLabel(card); return; }
+        if (!view.length || !shouldShowTypeLabel(type)) { clearCardTypeLabel(card); return; }
         markCardOverlayHost(card);
         var isTV = type === 'tv';
         view.find('.content-label').remove();
