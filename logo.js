@@ -101,16 +101,18 @@
 
 				if (is_mobile) {
 					img.style.width = "100%";
+					img.style.height = "auto";
+					img.style.maxHeight = "none";
 				} else {
 					img.style.width = custom_width + "em";
+					img.style.height = "auto";
+					img.style.maxHeight = "none";
 				}
 
 				if (custom_height && !is_mobile) {
 					img.style.maxHeight = custom_height + "em";
-					img.style.height = "auto";
-				} else {
-					img.style.height = "auto";
-					img.style.maxHeight = "none";
+					img.style.height = custom_height + "em";
+					img.style.width = "auto";
 				}
 			}
 
