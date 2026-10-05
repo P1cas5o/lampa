@@ -279,32 +279,56 @@
     });
     sloganObserver.observe(document.body, { childList: true, subtree: true });
 
-    function analyzeAndInvert(img, threshold) {
-        try {
-            var canvas = document.createElement('canvas');
-            var ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            if (canvas.width === 0 || canvas.height === 0) return;
-            ctx.drawImage(img, 0, 0);
-            var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            var data = imageData.data;
-            var darkPixels = 0;
-            var totalPixels = 0;
-            for (var i = 0; i < data.length; i += 4) {
-                var alpha = data[i + 3];
-                if (alpha < 10) continue;
-                totalPixels++;
-                var r = data[i], g = data[i + 1], b = data[i + 2];
-                var brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                if (brightness < 120) darkPixels++;
+   function analyzeAndInvert(img, threshold) {
+    try {
+        var canvas = document.createElement('canvas');
+        var ctx = canvas.getContext('2d');
+
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+
+        if (canvas.width === 0 || canvas.height === 0) return;
+
+        ctx.drawImage(img, 0, 0);
+
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var data = imageData.data;
+
+        var darkPixels = 0;
+        var totalPixels = 0;
+
+        for (var i = 0; i < data.length; i += 4) {
+            var alpha = data[i + 3];
+
+            if (alpha < 10) continue;
+
+            totalPixels++;
+
+            var r = data[i];
+            var g = data[i + 1];
+            var b = data[i + 2];
+
+            var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            var max = Math.max(r, g, b);
+
+            // Темний чорний/сірий або темний насичений колір
+            if (brightness < 100 && max < 160) {
+                darkPixels++;
             }
-            if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
-                var curFilter = img.style.filter || '';
-                img.style.filter = curFilter + " drop-shadow(0px 0px 0.5px rgba(255, 255, 255, 1))";
+        }
+
+        if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
+            var curFilter = img.style.filter || '';
+
+            if (curFilter.indexOf('drop-shadow') === -1) {
+                img.style.filter =
+                    curFilter +
+                    " drop-shadow(0px 0px 0.5px rgba(255, 255, 255, 1))";
             }
-        } catch (e) {}
-    }
+        }
+
+    } catch (e) {}
+}
     function handleLogo(e) {
         var render = e.object.activity.render();
         var data = e.data.movie;
