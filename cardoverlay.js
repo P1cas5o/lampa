@@ -3037,7 +3037,7 @@
         Lampa.SettingsApi.addParam({
             component: 'card_overlay',
             param: { name: 'seasons_info_mode', type: 'select', values: { none: 'Вимкнути', aired: 'Актуальна інформація', total: 'Повна кількість' }, default: DEFAULTS.seasons_info_mode },
-            field: { name: 'Інформація проо серії', description: 'Як відображати інформацію про серії та сезони' },
+            field: { name: 'Інформація про серії', description: 'Як відображати інформацію про серії та сезони' },
             onChange: function (v) { seasonInfoSettings.seasons_info_mode = v; updateSettingsKeepFocus('seasons_info_mode'); refreshSeasonInfo(); }
         });
         Lampa.SettingsApi.addParam({
