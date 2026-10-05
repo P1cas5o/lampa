@@ -281,31 +281,96 @@
 
     function analyzeAndInvert(img, threshold) {
         try {
+            var orgWidth = img.naturalWidth || img.width;
+            var orgHeight = img.naturalHeight || img.height;
+            if (orgWidth === 0 || orgHeight === 0) return;
+            
             var canvas = document.createElement('canvas');
             var ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth || img.width;
-            canvas.height = img.naturalHeight || img.height;
-            if (canvas.width === 0 || canvas.height === 0) return;
-            ctx.drawImage(img, 0, 0);
+            
+            // Додаємо невеликий відступ (1 піксель з кожного боку) для обводки
+            var pad = 1;
+            canvas.width = orgWidth + pad * 2;
+            canvas.height = orgHeight + pad * 2;
+            
+            // Малюємо оригінал по центру з урахуванням відступу
+            ctx.drawImage(img, pad, pad, orgWidth, orgHeight);
+            
             var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             var data = imageData.data;
+            var width = canvas.width;
+            var height = canvas.height;
+            
             var darkPixels = 0;
             var totalPixels = 0;
-            for (var i = 0; i < data.length; i += 4) {
-                var alpha = data[i + 3];
-                if (alpha < 10) continue;
-                totalPixels++;
-                var r = data[i], g = data[i + 1], b = data[i + 2];
-                var brightness = (r * 299 + g * 587 + b * 114) / 1000;
-                if (brightness < 120) darkPixels++;
+            
+            // Перевіряємо забарвлення за оригінальною площею
+            for (var y = pad; y < height - pad; y++) {
+                for (var x = pad; x < width - pad; x++) {
+                    var idx = (y * width + x) * 4;
+                    var alpha = data[idx + 3];
+                    if (alpha < 10) continue;
+                    totalPixels++;
+                    var r = data[idx], g = data[idx + 1], b = data[idx + 2];
+                    var brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                    if (brightness < 120) darkPixels++;
+                }
             }
-            if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
-                var curFilter = img.style.filter || '';
-                img.style.filter = curFilter + " drop-shadow(0px -1px 0px rgba(255,255,255,1)) drop-shadow(0px 1px 0px rgba(255,255,255,1)) drop-shadow(-1px 0px 0px rgba(255,255,255,1)) drop-shadow(1px 0px 0px rgba(255,255,255,1))";
+            
+            if (totalPixels > 0 && (darkPixels / totalPixels) >= (threshold || 0.85)) {
+                // Створюємо масив для нового зображення з обводкою
+                var outlineData = ctx.createImageData(width, height);
+                var srcData = data;
+                var dstData = outlineData.data;
+                
+                // Копіюємо старі дані
+                for (var i = 0; i < srcData.length; i++) {
+                    dstData[i] = srcData[i];
+                }
+                
+                // Проходимо по пікселях і там, де є прозорість біля темних пікселів, малюємо білий контур (1px)
+                for (var y = 1; y < height - 1; y++) {
+                    for (var x = 1; x < width - 1; x++) {
+                        var idx = (y * width + x) * 4;
+                        // Якщо поточний піксель прозорий, перевіряємо його сусідів
+                        if (srcData[idx + 3] < 10) {
+                            var hasDarkNeighbor = false;
+                            
+                            // Перевіряємо сусідів у радіусі 1 пікселя
+                            for (var ny = -1; ny <= 1; ny++) {
+                                for (var nx = -1; nx <= 1; nx++) {
+                                    if (nx === 0 && ny === 0) continue;
+                                    var nIdx = ((y + ny) * width + (x + nx)) * 4;
+                                    // Якщо сусід непрозорий і темний
+                                    if (srcData[nIdx + 3] > 10) {
+                                        var nr = srcData[nIdx], ng = srcData[nIdx + 1], nb = srcData[nIdx + 2];
+                                        var nBrightness = (nr * 299 + ng * 587 + nb * 114) / 1000;
+                                        if (nBrightness < 120) {
+                                            hasDarkNeighbor = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (hasDarkNeighbor) break;
+                            }
+                            
+                            // Якщо поряд є темний піксель — робимо цей піксель білим (контур)
+                            if (hasDarkNeighbor) {
+                                dstData[idx] = 255;     // R
+                                dstData[idx + 1] = 255; // G
+                                dstData[idx + 2] = 255; // B
+                                dstData[idx + 3] = 255; // Повна непрозорість (чітка лінія)
+                            }
+                        }
+                    }
+                }
+                
+                // Записуємо готовий результат з обводкою назад у картинку
+                ctx.putImageData(outlineData, 0, 0);
+                img.src = canvas.toDataURL();
             }
         } catch (e) {}
     }
-
     function handleLogo(e) {
         var render = e.object.activity.render();
         var data = e.data.movie;
