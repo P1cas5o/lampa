@@ -301,7 +301,7 @@
             }
             if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
                 var curFilter = img.style.filter || '';
-                img.style.filter = curFilter + " drop-shadow(0px 0px 1px rgba(255, 255, 255, 0.6))";
+                img.style.filter = curFilter + " drop-shadow(0px 0px 0.5px rgba(255, 255, 255, 0.95))";
             }
         } catch (e) {}
     }
