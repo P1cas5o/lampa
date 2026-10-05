@@ -533,7 +533,7 @@
                     var saturation = Lampa.Storage.get("logo_saturation", "1");
                     img.style.filter = "drop-shadow(3px 3px 3px rgba(0, 0, 0, 0.5)) saturate(" + saturation + ")";
                     
-                    if (!isPoster && !isBackdrop) analyzeAndInvert(img, 0.95);
+                    if (!isPoster && !isBackdrop) analyzeAndInvert(img, 0.92);
                     
                     finalTarget.empty().append(img);
                 }
