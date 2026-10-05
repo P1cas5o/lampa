@@ -297,7 +297,8 @@
             totalPixels++;
             var r = data[i], g = data[i + 1], b = data[i + 2];
             var brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            if (brightness < 120) darkPixels++;
+            var max = Math.max(r, g, b);
+            if (brightness < 100 && max < 160) darkPixels++;
         }
         if (totalPixels > 0 && (darkPixels / totalPixels) >= threshold) {
             var curFilter = img.style.filter || '';
