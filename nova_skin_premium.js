@@ -94,9 +94,6 @@
     try { Lampa.Storage.set(key, value); } catch (e) {}
   }
 
-  function enabled() {
-    return window.nova_skin_lampac_access === true && get(ENABLED_KEY, true) !== false;
-  }
   function heroEnabled() { return get('nova_skin_hero', true) !== false; }
   function artEnabled() { return get('nova_skin_hero_art', true) !== false; }
   function viewMode() { return get('nova_skin_view', 'list'); }
