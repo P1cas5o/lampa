@@ -1,10 +1,6 @@
 (function () {
   'use strict';
 
-  // LampaUA Premium build: upstream Nova Skin by amikdn; access, managed settings, resume, loading, search reliability, and payload filtering.
-
-  if (window.nova_skin_lampac_access !== true) return;
-
   if (window.nova_skin) return;
   window.nova_skin = true;
 
