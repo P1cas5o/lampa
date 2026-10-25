@@ -29,6 +29,25 @@
                 'padding: 0.2em 0.45em;' +
                 'border-radius: 0.75em 0;' +
             '}' +
+            '.card__view .card__age {' +
+                'right: 0;' +
+                'top: 0;' +
+                'padding: 0.2em 0.45em;' +
+                'border-radius: 0 0.75em;' +
+                'background: rgba(0, 0, 0, 0.6);' +
+                'position: absolute;' +
+                'margin-top: 0;' +
+                'font-size: 1.1em;' +
+                'z-index: 5;' +
+            '}' +
+            /* Виправлення для смартфонів (вертикальний режим), щоб плажка не пливла */
+            '@media (max-width: 768px) {' +
+                '.card__view .card__age {' +
+                    'font-size: 0.95em !important;' +
+                    'padding: 0.15em 0.35em !important;' +
+                    'border-radius: 0 0.5em !important;' +
+                '}' +
+            '}' +
             '.card__icons {' +
                 'top: 2.4em;' +
             '}';
@@ -57,10 +76,11 @@
                 vote[0].style.backgroundColor = color;
             }
 
-            // Повністю прибираємо плажку року з картки
             var age = this.html.querySelector('.card__age');
-            if (age) {
-                age.remove();
+            var view = this.html.querySelector('.card__view');
+
+            if (age && view) {
+                view.appendChild(age);
             }
         };
     }
