@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Torii gate">
+  <path d="M5 9 Q32 17 59 9 L56 17 Q32 25 8 17 Z" fill="#343B46" stroke="#78818D" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M10 19 Q32 25 54 19 L51 25 H13 Z" fill="#F4512A"/>
+  <path d="M14 31 H50 V37 H14 Z" fill="#F4512A"/>
+  <path d="M17 26 H24 V58 H17 Z M40 26 H47 V58 H40 Z" fill="#F4512A"/>
+  <path d="M18.5 27 H20.5 V57 H18.5 Z M41.5 27 H43.5 V57 H41.5 Z" fill="#FF9161"/>
+  <path d="M28 24 H36 V32 H28 Z" fill="#D93D22"/>
+  <path d="M16 56 H25 V60 H16 Z M39 56 H48 V60 H39 Z" fill="#343B46"/>
+</svg>
