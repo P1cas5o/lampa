@@ -1878,9 +1878,6 @@
       ['☑ Ручне очищення','manual'],
       ['🗑 Кошик','trash']
     ].forEach(function(it){Lampa.SettingsApi.addParam({component:SETTINGS,param:{type:'button'},field:{name:it[0]},onChange:function(){openLevel(it[1],'Cache Inspector · Test 4.8');}});});
-    // Direct shortcut: avoids the redundant Settings > Cache Inspector > Analyse-only page.
-    Lampa.SettingsApi.addParam({component:'interface',param:{type:'button'},field:{name:'Cache Inspector · аналіз кешу'},
-      onChange:function(){openLevel('overview','Cache Inspector · Test 4.8');}});
   }
   var tries=0,timer=setInterval(function(){
     tries++;
