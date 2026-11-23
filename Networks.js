@@ -1,4 +1,4 @@
-/* Networks — Franchise Layout Test 9 | Base: Networks.js (Library 2026-11-13)
+/* Networks — Franchise Pilot Test 8 | Base: Networks.js (Library 2026-11-13)
  * Streaming channel + shared service catalog navigation; preserve existing provider/store menu.
  * Franchise pilot: independent JSON registry + TMDB collections, no edits to Lampa Collection.
  * Studios Master v1.2.0 category definitions; Spectrolite handles native cards.
@@ -655,7 +655,7 @@ var nxServiceConfigs = {
         });
     }
 
-    // Franchise Layout Test 9. Keep this registry separate from Lampa's Collection.
+    // Franchise Pilot Test 8. Keep this registry separate from Lampa's Collection.
     // When franchises.json is published to this path, it replaces the built-in
     // pilot registry without a JS update. Offline / 404 uses the built-in copy.
     var nxFranchiseUrl = 'https://raw.githubusercontent.com/P1cas5o/lampa/main/franchises.json';
@@ -1067,7 +1067,7 @@ var nxServiceConfigs = {
             addLocalization();
             addSettings();
             nxRegisterCatalog();
-            if (!$('#nx-franchise-style').length) $('<style id="nx-franchise-style">.nx-franchise-group{display:flex;flex-wrap:wrap;column-gap:var(--tmdb-net-gap,.5em);row-gap:var(--tmdb-net-gap,.5em);align-items:center;flex:0 0 100%;width:100%;min-width:0;margin:0 0 var(--tmdb-net-gap,.5em) 0;padding:0}.nx-franchise-button{border:1px solid rgba(255,255,255,.35);border-radius:.65em;padding:0 .75em;max-width:100%}.nx-franchise-button.focus{box-shadow:0 0 0 .18em #fff}</style>').appendTo('head');
+            if (!$('#nx-franchise-style').length) $('<style id="nx-franchise-style">.nx-franchise-group{display:flex;flex-wrap:wrap;gap:var(--tmdb-net-gap,.5em);align-items:center;margin-top:.5em;width:100%}.nx-franchise-button{border:1px solid rgba(255,255,255,.35);border-radius:.65em;padding:0 .75em;max-width:100%}.nx-franchise-button.focus{box-shadow:0 0 0 .18em #fff}</style>').appendTo('head');
             var originalTMDBImage = Lampa.TMDB.image;
             Lampa.TMDB.image = function(url) {
                 if (url && typeof url === 'string' && url.indexOf('h0rjX5vjW5r8yEnUBStFarjcLT4') !== -1) return 'https://raw.githubusercontent.com/ko31k/LMP/main/wwwroot/img/20th-Century-Fox-Logo.png';
