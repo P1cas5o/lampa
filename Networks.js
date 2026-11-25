@@ -1,5 +1,5 @@
-/* Networks — Networks Test 30 | Base: Networks Test 29
- * Franchise: single navigation entry, activity-local state, initial paint batching, native portrait bottom spacing.
+/* Networks — Networks Test 31 | Base: Networks Test 30
+ * Franchise: native scroll viewport/header, early system title hiding, deduplicated control input; preserve Test 30 navigation and paint.
  * Franchise: optional JSON filters; filter-local numbering/count, independent header rows.
  * Streaming channel + shared service catalog navigation; preserve existing provider/store menu.
  * Franchise v2: four catalogs, HBO Harry Potter TV, collection recognition, aligned button row. No Lampa Collection edits.
@@ -994,6 +994,54 @@ var nxServiceConfigs = {
         nxFranchiseRefresh();
         try{var control=$(root).find('.nx-franchise-sort').first();Lampa.Controller.collectionFocus(control,$(root));}catch(e){}
     }
+    // Use the native scroll container, not the activity slide's absolute origin.
+    function nxFranchiseHeaderHost(root){
+        var scroll=root.querySelector('.activity__body .scroll.layer--wheight')||root.querySelector('.activity__body .scroll')||root.querySelector('.scroll.layer--wheight')||root.querySelector('.scroll');
+        if(!scroll||!scroll.parentNode)return null;
+        var host=root.querySelector('.nx-franchise-header-host');
+        if(!host){host=document.createElement('div');host.className='nx-franchise-header-host';}
+        if(host.parentNode!==scroll.parentNode||host.nextElementSibling!==scroll)scroll.parentNode.insertBefore(host,scroll);
+        root.__nxScroll=scroll;
+        // The native Layer height calculation subtracts this element, including its top clearance.
+        if(scroll.classList.contains('layer--wheight'))scroll.mheight=host;
+        return host;
+    }
+    function nxFranchiseFit(root){
+        if(root!==nxFranchiseRoot||!root.isConnected)return;
+        var host=root.querySelector('.nx-franchise-header-host'), scroll=root.__nxScroll;
+        if(!host||!scroll||!scroll.isConnected)return;
+        var top=document.querySelector('.head'), nav=document.querySelector('.navigation-bar');
+        var topRect=top&&top.getBoundingClientRect(), hostRect=host.getBoundingClientRect();
+        if(!hostRect.width)return;
+        var gap=topRect&&topRect.height?Math.max(0,Math.ceil(topRect.bottom-hostRect.top)):0;
+        var padding=gap+'px';if(host.style.paddingTop!==padding)host.style.paddingTop=padding;
+        // Native height API; then account for actual viewport geometry (including floating mobile nav).
+        try{if(Lampa.Layer&&Lampa.Layer.update)Lampa.Layer.update(root);}catch(e){}
+        var rect=scroll.getBoundingClientRect(), bottom=window.innerHeight;
+        if(nav&&window.innerHeight>window.innerWidth){
+            var nr=nav.getBoundingClientRect();
+            if(nr.height&&nr.width&&nr.top>window.innerHeight/2&&nr.top<bottom&&nr.left<rect.right&&nr.right>rect.left)bottom=nr.top;
+        }
+        var height=Math.floor(bottom-Math.max(0,rect.top));
+        if(height>80&&scroll.style.height!==height+'px')scroll.style.height=height+'px';
+    }
+    function nxFranchiseFitLater(root){
+        if(root.__nxFitPending)return;
+        root.__nxFitPending=true;
+        requestAnimationFrame(function(){root.__nxFitPending=false;nxFranchiseFit(root);});
+    }
+    function nxFranchiseCollection(root){
+        try{if(Lampa.Controller.collectionSet)Lampa.Controller.collectionSet(root,false,true);}catch(e){}
+    }
+    // Lampa may deliver hover:enter and click for the same tap. Ignore the paired event only.
+    function nxFranchiseTap(fn){
+        var lastType='',lastAt=0;
+        return function(e){var type=e&&e.type||'',now=Date.now();
+            if(type&&lastType&&type!==lastType&&now-lastAt<350)return;
+            lastType=type;lastAt=now;
+            return fn.apply(this,arguments);
+        };
+    }
     function nxFranchiseLayout(root,page){
         var cards=Array.prototype.slice.call(root.querySelectorAll('.card')), ranks={}, changed=false;
         nxFranchiseVisible(page).forEach(function(item,i){ranks[nxFranchiseKey(item)]=i;});
@@ -1011,8 +1059,8 @@ var nxServiceConfigs = {
                 root.__nxLayoutPending=true;
                 requestAnimationFrame(function(){
                     root.__nxLayoutPending=false;if(root!==nxFranchiseRoot)return;
-                    try{if(Lampa.Controller.collectionSet)Lampa.Controller.collectionSet($(root).find('.selector').filter(':visible'));}catch(e){}
-                    window.dispatchEvent(new Event('resize'));
+                    nxFranchiseCollection(root);
+                    nxFranchiseFit(root);
                 });
             }
         }
@@ -1022,7 +1070,8 @@ var nxServiceConfigs = {
         nxFranchiseLayout(root,page);
         var viewed=nxFranchiseViewed(), count=0;
         Object.keys(page.visibleMeta).forEach(function(key){if(page.visibleMeta[key].eligible&&viewed[key])count++;});
-        var r=$(root), head=r.children('.nx-franchise-head');
+        var r=$(root), host=nxFranchiseHeaderHost(root);if(!host)return;
+        var head=$(host).children('.nx-franchise-head');
         if(head.length && (head.attr('data-nx-mode')!==page.mode||head.attr('data-nx-filter')!==page.selectedFilter.id)){head.remove();head=$();}
         if(!head.length){
             head=$('<div class="nx-franchise-head"><div class="nx-franchise-heading"><span class="nx-franchise-title"></span><span class="nx-franchise-count"></span></div><div class="selector nx-franchise-sort"></div></div>');
@@ -1030,11 +1079,11 @@ var nxServiceConfigs = {
             var control=head.find('.nx-franchise-sort');
             control.text(page.mode==='chronology'?'Порядок: хронологія':'Порядок: дата виходу');
             var busy=false;
-            control.on('hover:enter click',function(){
+            control.on('hover:enter click',nxFranchiseTap(function(){
                 if(busy)return;busy=true;
                 Lampa.Storage.set('nx_franchise_sort',page.mode==='chronology'?'release':'chronology');
                 nxFranchiseReplace(page,page.selectedFilter.id);
-            });
+            }));
             var filterButton=null;
             if(page.filters.length){
                 var controls=$('<div class="nx-franchise-controls"></div>');
@@ -1045,7 +1094,7 @@ var nxServiceConfigs = {
                 var menu=$('<div class="nx-franchise-filter-menu"></div>').hide();
                 controls.append(menu);
                 function updateCollection(){
-                    try{if(Lampa.Controller.collectionSet)Lampa.Controller.collectionSet(r.find('.selector').filter(':visible'));}catch(e){}
+                    nxFranchiseCollection(root);
                 }
                 function closeMenu(){menu.hide();filterButton.attr('aria-expanded','false');updateCollection();}
                 filterButton.attr('aria-expanded','false');
@@ -1059,12 +1108,12 @@ var nxServiceConfigs = {
                     });
                     menu.append(option);
                 });
-                filterButton.on('hover:enter click',function(){
+                filterButton.on('hover:enter click',nxFranchiseTap(function(){
                     if(menu.is(':visible')){closeMenu();return;}
                     menu.show();filterButton.attr('aria-expanded','true');updateCollection();
-                });
+                }));
             }
-            r.prepend(head);
+            $(host).append(head);
             try{if(Lampa.Controller.collectionAppend){Lampa.Controller.collectionAppend(control);if(filterButton)Lampa.Controller.collectionAppend(filterButton);}}catch(e){}
         }
         var countEl=head.find('.nx-franchise-count'), value=count+'/'+page.total;
@@ -1110,7 +1159,8 @@ var nxServiceConfigs = {
     function nxFranchiseRefresh(){
         var a;try{a=Lampa.Activity.active();}catch(e){}
         var id=nxFranchiseActivityId(a);
-        if(!id){nxFranchiseDetach();return;}
+        if(!id){nxFranchiseDetach();document.body.classList.remove('nx-franchise-active');return;}
+        document.body.classList.add('nx-franchise-active');
         var activity=a.activity||a, page=activity.__nxFranchisePage||nxFranchisePages[id];
         if(!page||page.id!==id)return;
         var root=nxFranchiseRender(a);
@@ -1129,6 +1179,7 @@ var nxServiceConfigs = {
         try{
             nxFranchisePaint(root,page);
             nxFranchiseSystemTitle(page);
+            nxFranchiseFit(root);nxFranchiseFitLater(root);
             var cards=root.querySelectorAll('.card');
             if(cards.length&&root.querySelectorAll('.card.nx-franchise-card').length===cards.length){
                 root.classList.remove('nx-franchise-preparing');
@@ -1144,7 +1195,7 @@ var nxServiceConfigs = {
     function nxFranchiseInstall(){
         var tmdb=Lampa.Api&&Lampa.Api.sources&&Lampa.Api.sources.tmdb;
         if(!tmdb||typeof tmdb.list!=='function')return false;
-        if(tmdb.list.__nxFranchise30)return true;
+        if(tmdb.list.__nxFranchise31)return true;
         var base=tmdb.list;
         function list(params,ok,fail){
             if(!params||typeof params.url!=='string'||params.url.indexOf(nxFranchisePrefix)!==0)return base.apply(this,arguments);
@@ -1166,7 +1217,7 @@ var nxServiceConfigs = {
                 nxFranchiseRefresh();nxFranchiseSchedule();
             },state&&state.id===id?state.selectedFilter.id:route.filter);
         }
-        list.__nxFranchise30=true;tmdb.list=list;return true;
+        list.__nxFranchise31=true;tmdb.list=list;return true;
     }
     function nxFranchiseOpen(id,title,button){
         var a;try{a=Lampa.Activity.active();}catch(e){}
@@ -1485,7 +1536,17 @@ var nxServiceConfigs = {
         Lampa.Component.add('networks_catalog_main',nxCatalogMain);
         Lampa.Component.add('networks_catalog_view',nxCatalogView);
         Lampa.Component.add('networks_franchise_main',nxFranchiseMain);
-        Lampa.Listener.follow('activity',nxFranchiseSchedule);
+        Lampa.Listener.follow('activity',function(e){
+            // Activity.start fires synchronously after Head.title; hide only the stock title, not its bar.
+            if(e&&e.type==='start'){
+                var id=nxFranchiseActivityId(e.object);
+                document.body.classList.toggle('nx-franchise-active',!!id);
+                if(id)nxFranchisePrepare(e.object,id);
+                else nxFranchiseDetach();
+            }
+            nxFranchiseSchedule();
+        });
+        Lampa.Listener.follow('resize_end',function(){if(nxFranchiseRoot)nxFranchiseFitLater(nxFranchiseRoot);});
         try{Lampa.Storage.listener.follow('change',function(){if(nxFranchiseRoot)nxFranchiseSchedule();});}catch(e){}
         try{if(Lampa.Favorite.listener)Lampa.Favorite.listener.follow('change',nxFranchiseSchedule);}catch(e){}
         // Full thematic lists use Lampa's native category_full (Obsidian-compatible).
@@ -1543,7 +1604,7 @@ var nxServiceConfigs = {
             addLocalization();
             addSettings();
             nxRegisterCatalog();
-            if (!$('#nx-franchise-style').length) $('<style id="nx-franchise-style">.nx-franchise-screen .nx-franchise-grid{justify-content:flex-start!important}.nx-franchise-screen .nx-franchise-filtered{display:none!important}.nx-franchise-screen.nx-franchise-preparing .card{visibility:hidden!important}@media (orientation:landscape){.nx-franchise-screen .nx-franchise-grid{padding-bottom:1.2em!important}}.nx-franchise-screen .card__view{position:relative}.nx-franchise-screen .nx-franchise-head{display:flex;align-items:center;justify-content:space-between;gap:.6em;flex-wrap:wrap;padding:.5em 1em .65em}.nx-franchise-screen .nx-franchise-head.nx-franchise-has-filters{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:.6em;row-gap:.35em}.nx-franchise-screen .nx-franchise-has-filters .nx-franchise-heading{min-width:0;flex-wrap:wrap}.nx-franchise-screen .nx-franchise-has-filters .nx-franchise-title{min-width:0;flex:0 1 auto;white-space:normal;overflow-wrap:anywhere}.nx-franchise-screen .nx-franchise-has-filters .nx-franchise-count{flex:0 0 auto}.nx-franchise-screen .nx-franchise-has-filters>.nx-franchise-sort{max-width:48vw;box-sizing:border-box;white-space:normal;text-align:right;justify-self:end}.nx-franchise-screen .nx-franchise-controls{grid-column:1/-1;min-width:0;max-width:100%;display:flex;justify-content:flex-end;padding-bottom:.15em}.nx-franchise-screen .nx-franchise-filter{max-width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:.38em .72em;border-radius:.5em;background:rgba(255,255,255,.12);font-size:.95em}.nx-franchise-screen .nx-franchise-filter.focus{box-shadow:0 0 0 .15em #fff}.nx-franchise-heading{display:flex;align-items:center;gap:.65em;min-width:0}.nx-franchise-title{font-size:1.25em;font-weight:650}.nx-franchise-count{font-size:.9em;padding:.28em .65em;background:rgba(255,255,255,.12);border-radius:1em;white-space:nowrap}.nx-franchise-count.nx-franchise-complete{color:#8ee6aa}.nx-franchise-screen .nx-franchise-number{position:absolute;left:.12em;top:.35em;z-index:10;display:flex;align-items:flex-start;gap:.13em;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 3px #000);color:rgba(18,19,24,.88);font-size:2.5em;font-weight:800;-webkit-text-stroke:.035em rgba(255,255,255,.9);font-family:Arial,sans-serif}.nx-franchise-screen .nx-franchise-tick{display:none;font-size:.38em;line-height:1.3;border-radius:50%;background:#259c55;color:white;-webkit-text-stroke:0;width:1.3em;text-align:center;align-self:flex-start}.nx-franchise-screen .nx-franchise-viewed{color:#237d48;-webkit-text-stroke-color:#a6efbd}.nx-franchise-screen .nx-franchise-viewed .nx-franchise-tick{display:inline-block}.nx-franchise-screen .nx-franchise-special{font-size:.8em;color:white;-webkit-text-stroke:0;background:rgba(0,0,0,.75);border-radius:.35em;padding:.35em .5em;top:34%}.nx-franchise-sort{display:inline-block;padding:.45em .8em;margin:0;border-radius:.5em;background:rgba(255,255,255,.12)}.nx-franchise-screen .nx-franchise-sort{margin-left:auto}.nx-franchise-screen .nx-franchise-controls{position:relative}.nx-franchise-screen .nx-franchise-filter-menu{position:absolute;right:0;top:100%;z-index:30;min-width:12em;max-width:85vw;max-height:45vh;overflow:auto;background:#252830;border:1px solid rgba(255,255,255,.25);border-radius:.5em;padding:.3em;box-shadow:0 .3em 1em #0008}.nx-franchise-screen .nx-franchise-filter-option{padding:.55em .7em;border-radius:.3em;white-space:normal}.nx-franchise-screen .nx-franchise-filter-option.focus{background:#fff;color:#222}.nx-franchise-sort.focus{box-shadow:0 0 0 .15em #fff}.nx-franchise-group{display:flex;flex-wrap:wrap;column-gap:var(--tmdb-net-gap,.5em);row-gap:var(--tmdb-net-gap,.5em);align-items:center;flex:0 0 100%;width:100%;min-width:0;margin:0;padding:0}.nx-franchise-button{border:1px solid rgba(255,255,255,.35);border-radius:.65em;padding:0 .75em;max-width:100%}.nx-franchise-button.focus{box-shadow:0 0 0 .18em #fff}.nx-franchise-group{box-sizing:border-box}.nx-franchise-group .nx-franchise-button{margin-top:var(--tmdb-net-gap,.5em)}.nx-franchise-screen .nx-franchise-grid>.nx-franchise-card{position:relative!important;box-sizing:border-box!important;padding-left:2.45em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{left:.15em!important;top:.35em!important;width:1.25em;justify-content:flex-start;flex-direction:column;align-items:center;font-size:1.9em;gap:.08em;color:transparent;-webkit-text-stroke:.046em rgba(255,255,255,.92)}.nx-franchise-screen .nx-franchise-card>.nx-franchise-viewed{color:#f1c40f;-webkit-text-stroke-color:#ffe89a}.nx-franchise-screen .nx-franchise-card>.nx-franchise-continued{color:transparent;-webkit-text-stroke-color:#bb80dc}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number .nx-franchise-tick{background:#f1c40f;color:#222;align-self:center;font-size:.43em}.nx-franchise-screen .nx-franchise-count{color:#f1c40f;border:1px solid rgba(241,196,15,.4);background:rgba(241,196,15,.13)}.nx-franchise-screen .nx-franchise-count.nx-franchise-complete{color:#f1c40f}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{left:.15em!important;top:.55em!important;width:1.35em;display:flex;align-items:center;justify-content:center;padding:.45em .16em!important;font-size:.72em!important;line-height:1!important;font-weight:700;color:#f5f5f5;background:rgba(0,0,0,.58)!important;border:1px solid rgba(255,255,255,.16);border-radius:.55em;writing-mode:vertical-rl;transform:rotate(180deg);text-orientation:mixed;letter-spacing:.02em;white-space:nowrap}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special .nx-franchise-digit{display:block;overflow:visible}@media (max-width:700px) and (orientation:portrait){.nx-franchise-screen .nx-franchise-grid>.nx-franchise-card{width:50%!important;max-width:50%!important;flex:0 0 50%!important;margin-left:0!important;margin-right:0!important;padding-left:2.35em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{font-size:1.78em;left:.12em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{font-size:.68em!important;left:.12em!important;width:1.28em}}@media (max-width:960px) and (orientation:landscape){.nx-franchise-screen .nx-franchise-grid>.nx-franchise-card{padding-left:2.35em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{font-size:1.78em;left:.12em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{font-size:.68em!important;left:.12em!important;width:1.28em}}.nx-franchise-hide-system-title{visibility:hidden!important;pointer-events:none!important}.nx-franchise-screen .nx-franchise-heading{flex:1 1 auto;flex-wrap:wrap}.nx-franchise-screen .nx-franchise-title{overflow-wrap:anywhere}.nx-franchise-screen .nx-franchise-head{padding-bottom:.25em}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{z-index:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{left:auto!important;right:auto!important;left:1.45em!important;z-index:0}.nx-franchise-screen .nx-franchise-card>.card__view{z-index:1}.nx-franchise-screen .nx-franchise-card.focus>.card__view{z-index:2}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{background:none!important;border:0!important;padding:0!important;writing-mode:horizontal-tb;transform:none;gap:.45em;filter:none;color:#f5f5f5;-webkit-text-stroke:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special .nx-franchise-digit{writing-mode:vertical-rl;transform:rotate(180deg);text-shadow:0 1px 3px #000}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special.nx-franchise-viewed{color:#f1c40f;-webkit-text-stroke:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special.nx-franchise-continued{color:#bb80dc;-webkit-text-stroke:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special .nx-franchise-tick{font-size:1.05em;flex:none;filter:drop-shadow(0 1px 2px #000)}</style>').appendTo('head');
+            if (!$('#nx-franchise-style').length) $('<style id="nx-franchise-style">.nx-franchise-screen .nx-franchise-grid{justify-content:flex-start!important}.nx-franchise-header-host{position:relative;z-index:5;box-sizing:border-box;flex:none}.nx-franchise-header-host .nx-franchise-head{position:relative;z-index:5}.nx-franchise-active .head .head__title,.nx-franchise-active .head .head__name,.nx-franchise-active .head .head__title-text{visibility:hidden!important;pointer-events:none!important}.nx-franchise-screen .nx-franchise-filtered{display:none!important}.nx-franchise-screen.nx-franchise-preparing .card{visibility:hidden!important}@media (orientation:landscape){.nx-franchise-screen .nx-franchise-grid{padding-bottom:1.2em!important}}.nx-franchise-screen .card__view{position:relative}.nx-franchise-screen .nx-franchise-head{display:flex;align-items:center;justify-content:space-between;gap:.6em;flex-wrap:wrap;padding:.5em 1em .65em}.nx-franchise-screen .nx-franchise-head.nx-franchise-has-filters{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:.6em;row-gap:.35em}.nx-franchise-screen .nx-franchise-has-filters .nx-franchise-heading{min-width:0;flex-wrap:wrap}.nx-franchise-screen .nx-franchise-has-filters .nx-franchise-title{min-width:0;flex:0 1 auto;white-space:normal;overflow-wrap:anywhere}.nx-franchise-screen .nx-franchise-has-filters .nx-franchise-count{flex:0 0 auto}.nx-franchise-screen .nx-franchise-has-filters>.nx-franchise-sort{max-width:48vw;box-sizing:border-box;white-space:normal;text-align:right;justify-self:end}.nx-franchise-screen .nx-franchise-controls{grid-column:1/-1;min-width:0;max-width:100%;display:flex;justify-content:flex-end;padding-bottom:.15em}.nx-franchise-screen .nx-franchise-filter{max-width:100%;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:.38em .72em;border-radius:.5em;background:rgba(255,255,255,.12);font-size:.95em}.nx-franchise-screen .nx-franchise-filter.focus{box-shadow:0 0 0 .15em #fff}.nx-franchise-heading{display:flex;align-items:center;gap:.65em;min-width:0}.nx-franchise-title{font-size:1.25em;font-weight:650}.nx-franchise-count{font-size:.9em;padding:.28em .65em;background:rgba(255,255,255,.12);border-radius:1em;white-space:nowrap}.nx-franchise-count.nx-franchise-complete{color:#8ee6aa}.nx-franchise-screen .nx-franchise-number{position:absolute;left:.12em;top:.35em;z-index:10;display:flex;align-items:flex-start;gap:.13em;line-height:1;pointer-events:none;filter:drop-shadow(0 1px 3px #000);color:rgba(18,19,24,.88);font-size:2.5em;font-weight:800;-webkit-text-stroke:.035em rgba(255,255,255,.9);font-family:Arial,sans-serif}.nx-franchise-screen .nx-franchise-tick{display:none;font-size:.38em;line-height:1.3;border-radius:50%;background:#259c55;color:white;-webkit-text-stroke:0;width:1.3em;text-align:center;align-self:flex-start}.nx-franchise-screen .nx-franchise-viewed{color:#237d48;-webkit-text-stroke-color:#a6efbd}.nx-franchise-screen .nx-franchise-viewed .nx-franchise-tick{display:inline-block}.nx-franchise-screen .nx-franchise-special{font-size:.8em;color:white;-webkit-text-stroke:0;background:rgba(0,0,0,.75);border-radius:.35em;padding:.35em .5em;top:34%}.nx-franchise-sort{display:inline-block;padding:.45em .8em;margin:0;border-radius:.5em;background:rgba(255,255,255,.12)}.nx-franchise-screen .nx-franchise-sort{margin-left:auto}.nx-franchise-screen .nx-franchise-controls{position:relative}.nx-franchise-screen .nx-franchise-filter-menu{position:absolute;right:0;top:100%;z-index:30;min-width:12em;max-width:85vw;max-height:45vh;overflow:auto;background:#252830;border:1px solid rgba(255,255,255,.25);border-radius:.5em;padding:.3em;box-shadow:0 .3em 1em #0008}.nx-franchise-screen .nx-franchise-filter-option{padding:.55em .7em;border-radius:.3em;white-space:normal}.nx-franchise-screen .nx-franchise-filter-option.focus{background:#fff;color:#222}.nx-franchise-sort.focus{box-shadow:0 0 0 .15em #fff}.nx-franchise-group{display:flex;flex-wrap:wrap;column-gap:var(--tmdb-net-gap,.5em);row-gap:var(--tmdb-net-gap,.5em);align-items:center;flex:0 0 100%;width:100%;min-width:0;margin:0;padding:0}.nx-franchise-button{border:1px solid rgba(255,255,255,.35);border-radius:.65em;padding:0 .75em;max-width:100%}.nx-franchise-button.focus{box-shadow:0 0 0 .18em #fff}.nx-franchise-group{box-sizing:border-box}.nx-franchise-group .nx-franchise-button{margin-top:var(--tmdb-net-gap,.5em)}.nx-franchise-screen .nx-franchise-grid>.nx-franchise-card{position:relative!important;box-sizing:border-box!important;padding-left:2.45em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{left:.15em!important;top:.35em!important;width:1.25em;justify-content:flex-start;flex-direction:column;align-items:center;font-size:1.9em;gap:.08em;color:transparent;-webkit-text-stroke:.046em rgba(255,255,255,.92)}.nx-franchise-screen .nx-franchise-card>.nx-franchise-viewed{color:#f1c40f;-webkit-text-stroke-color:#ffe89a}.nx-franchise-screen .nx-franchise-card>.nx-franchise-continued{color:transparent;-webkit-text-stroke-color:#bb80dc}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number .nx-franchise-tick{background:#f1c40f;color:#222;align-self:center;font-size:.43em}.nx-franchise-screen .nx-franchise-count{color:#f1c40f;border:1px solid rgba(241,196,15,.4);background:rgba(241,196,15,.13)}.nx-franchise-screen .nx-franchise-count.nx-franchise-complete{color:#f1c40f}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{left:.15em!important;top:.55em!important;width:1.35em;display:flex;align-items:center;justify-content:center;padding:.45em .16em!important;font-size:.72em!important;line-height:1!important;font-weight:700;color:#f5f5f5;background:rgba(0,0,0,.58)!important;border:1px solid rgba(255,255,255,.16);border-radius:.55em;writing-mode:vertical-rl;transform:rotate(180deg);text-orientation:mixed;letter-spacing:.02em;white-space:nowrap}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special .nx-franchise-digit{display:block;overflow:visible}@media (max-width:700px) and (orientation:portrait){.nx-franchise-screen .nx-franchise-grid>.nx-franchise-card{width:50%!important;max-width:50%!important;flex:0 0 50%!important;margin-left:0!important;margin-right:0!important;padding-left:2.35em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{font-size:1.78em;left:.12em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{font-size:.68em!important;left:.12em!important;width:1.28em}}@media (max-width:960px) and (orientation:landscape){.nx-franchise-screen .nx-franchise-grid>.nx-franchise-card{padding-left:2.35em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{font-size:1.78em;left:.12em!important}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{font-size:.68em!important;left:.12em!important;width:1.28em}}.nx-franchise-hide-system-title{visibility:hidden!important;pointer-events:none!important}.nx-franchise-screen .nx-franchise-heading{flex:1 1 auto;flex-wrap:wrap}.nx-franchise-screen .nx-franchise-title{overflow-wrap:anywhere}.nx-franchise-screen .nx-franchise-head{padding-bottom:.25em}.nx-franchise-screen .nx-franchise-card>.nx-franchise-number{z-index:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{left:auto!important;right:auto!important;left:1.45em!important;z-index:0}.nx-franchise-screen .nx-franchise-card>.card__view{z-index:1}.nx-franchise-screen .nx-franchise-card.focus>.card__view{z-index:2}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special{background:none!important;border:0!important;padding:0!important;writing-mode:horizontal-tb;transform:none;gap:.45em;filter:none;color:#f5f5f5;-webkit-text-stroke:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special .nx-franchise-digit{writing-mode:vertical-rl;transform:rotate(180deg);text-shadow:0 1px 3px #000}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special.nx-franchise-viewed{color:#f1c40f;-webkit-text-stroke:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special.nx-franchise-continued{color:#bb80dc;-webkit-text-stroke:0}.nx-franchise-screen .nx-franchise-card>.nx-franchise-special .nx-franchise-tick{font-size:1.05em;flex:none;filter:drop-shadow(0 1px 2px #000)}</style>').appendTo('head');
             Lampa.Listener.follow('activity,full', function (e) {
                 if (e.type === 'complite' || e.type === 'archive') renderNetworks();
             });
