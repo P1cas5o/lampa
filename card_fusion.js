@@ -6815,17 +6815,27 @@ function applyDynamicColorToIcon($iconElement, colorData, isWide) {
   var st=document.createElement('style'); st.id='cf-portrait-backdrop-css';
   st.textContent=`
  @media screen and (orientation: portrait) and (max-width: 899px){
-  body.cf-portrait-edge-head .head,body.cf-portrait-edge-head .head__body{
-    background:none!important;background-color:transparent!important;background-image:none!important;
-    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;
-  }
-  body.cf-portrait-edge-head .head{height:0!important;overflow:visible!important;position:relative!important;z-index:20!important;}
-  body.cf-portrait-edge-head .wrap__content{padding-top:0!important;}
-  body.cf-portrait-edge-head .head::before{
-    content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
-    height:calc(var(--cf-portrait-head-height,82px) * 1.6);
-    background:linear-gradient(to bottom,rgba(0,0,0,.30),transparent);
-  }
+  body.cf-portrait-edge-head .head,
+body.cf-portrait-edge-head .head__body{
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  -webkit-backdrop-filter:none!important;
+  backdrop-filter:none!important;
+  box-shadow:none!important;
+}
+body.cf-portrait-edge-head .head{
+  height:var(--cf-portrait-head-height,82px)!important;
+  overflow:hidden!important;
+  position:relative!important;
+  z-index:20!important;
+}
+body.cf-portrait-edge-head .wrap__content{
+  padding-top:var(--cf-portrait-head-height,82px)!important;
+}
+body.cf-portrait-edge-head .head::before{
+  display:none!important;
+}
   .cf-portrait-full{background:transparent!important;}
   .cf-portrait-host{position:relative!important;isolation:isolate;z-index:0;}
   .cf-portrait-host > .full-start__background,.cf-portrait-host .full-start__background.cf-portrait-own-bg{
