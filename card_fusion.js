@@ -6820,7 +6820,9 @@ function applyDynamicColorToIcon($iconElement, colorData, isWide) {
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;box-shadow:none!important;
   }
   body.cf-portrait-edge-head .head{height:0!important;overflow:visible!important;position:relative!important;z-index:20!important;}
-  body.cf-portrait-edge-head .wrap__content{padding-top:0!important;}
+  body.cf-portrait-edge-head .wrap__content {
+  padding-top: var(--cf-portrait-head-height, 82px) !important;
+}
   body.cf-portrait-edge-head .head::before{
     content:"";position:absolute;left:0;right:0;top:0;z-index:-1;pointer-events:none;
     height:calc(var(--cf-portrait-head-height,82px) * 1.6);
